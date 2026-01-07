@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>入稿シート自動作成フォーム</title>
+    <style>
+      :root {
+        --bg:#f7f8fa;
+        --card:#fff;
+        --ink:#1f2937;
+        --muted:#6b7280;
+        --pri:#2563eb;
+        --red:#dc2626;
+        --line:#e5e7eb;
+      }
+      body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+             color:var(--ink); background:var(--bg); }
+      .wrap { max-width:880px; margin:auto; padding:20px; }
+      h1 { font-size:22px; margin:0 0 14px; }
+      .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+              padding:14px; margin-bottom:14px; }
+      .grid { display:grid; gap:10px; }
+      .g3   { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+      label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+      input[type="number"], input[type="date"], input[type="text"], select {
+        width:80%; padding:8px 10px; border:1px solid var(--line);
+        border-radius:8px; background:#fff; font-size:14px;
+      }
+      .radio { display:flex; gap:10px; align-items:center; }
+      .radio label { margin:0 6px 0 2px; color:var(--ink); font-size:14px; }
+      button { appearance:none; border:1px solid var(--line); background:#fff;
+               border-radius:10px; padding:8px 12px; font-size:14px; cursor:pointer; }
+      button.primary { background:var(--pri); color:#fff; border-color:var(--pri); }
+      button.ghost   { background:transparent; }
+      button.red     { background:var(--red); color:#fff; border-color:var(--red); }
+      .media-card {
+        border:1px dashed var(--line);
+        border-radius:10px;
+        overflow: hidden;
+        margin-bottom: 12px;
+      }
+      .media-accordion-header {
+        background: #f9fafb;
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        font-size: 14px;
+        user-select: none;
+        transition: background 0.2s;
+      }
+      .media-accordion-header:hover {
+        background: #f3f4f6;
+      }
+      .media-accordion-header .header-left {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .media-accordion-header .header-right {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .media-accordion-header .icon {
+        transition: transform 0.2s;
+        font-size: 12px;
+      }
+      .media-accordion-header.active .icon {
+        transform: rotate(180deg);
+      }
+      .media-accordion-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+        background: #fff;
+      }
+      .media-accordion-content.active {
+        max-height: 3000px;
+        transition: max-height 0.5s ease-in;
+      }
+      .media-accordion-content-inner {
+        padding: 16px;
+      }
+      .media-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+      .muted { color:var(--muted); }
+      .error { color:var(--red); font-size:12px; margin-top:4px; }
+      .total { font-weight:600; }
+      .footer { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .divider { height:1px; background:var(--line); margin:10px 0; }
+      @media (max-width:720px) { .g3 { grid-template-columns:1fr; } }
+      .req {
+        color: var(--red);
+        font-weight: bold;
+      }
+      .loading-indicator {
+        color: var(--muted);
+      }
+
+      /* アコーディオンスタイル */
+      .accordion {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin-bottom: 8px;
+        overflow: hidden;
+      }
+      .accordion-header {
+        background: #f9fafb;
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        font-size: 14px;
+        user-select: none;
+        transition: background 0.2s;
+      }
+      .accordion-header:hover {
+        background: #f3f4f6;
+      }
+      .accordion-header .icon {
+        transition: transform 0.2s;
+      }
+      .accordion-header.active .icon {
+        transform: rotate(180deg);
+      }
+      .accordion-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease-out;
+        background: #fff;
+      }
+      .accordion-content.active {
+        max-height: 2000px;
+        transition: max-height 0.5s ease-in;
+      }
+      .accordion-content-inner {
+        padding: 16px;
+      }
+
+      /* 3カラムグリッドレイアウト */
+      .fields-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px 20px;
+      }
+      @media (max-width: 1024px) {
+        .fields-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 720px) {
+        .fields-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      /* フィールドスタイル */
+      .field-item {
+        display: grid;
+        grid-template-rows: auto 38px;
+        align-items: end;
+        gap: 6px;
+      }
+      .field-item label {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.4;
+        word-wrap: break-word;
+        align-self: start;
+      }
+      .field-item input,
+      .field-item select {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        font-size: 14px;
+        box-sizing: border-box;
+        height: 38px !important;
+        min-height: 38px !important;
+        max-height: 38px !important;
+        line-height: normal;
+        vertical-align: middle;
+        /* 【重要】selectとinputの高さを完全に統一 */
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        font-family: inherit;
+      }
+      .field-item select {
+        /* プルダウン用の矢印アイコンを追加 */
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+        background-color: white;
+        padding-right: 30px;
+      }
+      .dynamic-fields {
+        margin-top: 10px;
+      }
+
+      /* ローディングオーバーレイ */
+      .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 9999;
+        align-items: center;
+        justify-content: center;
+      }
+      .loading-overlay.active {
+        display: flex;
+      }
+      .loading-content {
+        background: white;
+        border-radius: 16px;
+        padding: 40px;
+        text-align: center;
+        max-width: 400px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .spinner {
+        width: 60px;
+        height: 60px;
+        margin: 0 auto 20px;
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid var(--pri);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .loading-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: var(--ink);
+      }
+      .loading-message {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .loading-estimate {
+        font-size: 12px;
+        color: var(--pri);
+        margin-top: 12px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ローディングオーバーレイ -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <div class="loading-title">入稿シート作成中...</div>
+        <div class="loading-message" id="loadingMessage">AI解析と書き込みを実行しています</div>
+        <div class="loading-estimate" id="loadingEstimate"></div>
+      </div>
+    </div>
+
+    <div class="wrap">
+      <!-- 基本情報 -->
+      <div class="card">
+        <h2 style="font-size:18px; margin:0 0 12px;">基本情報</h2>
+
+        <!-- 与件情報 -->
+        <div style="margin-bottom:12px;">
+          <label>与件情報 <span class="req">*</span></label>
+          <textarea id="requestText" rows="4" style="width:95%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:14px; font-family:inherit; resize:vertical;" placeholder="与件情報の内容を入力してください"></textarea>
+          <div id="err-requestText" class="error" aria-live="polite"></div>
+        </div>
+
+        <!-- クライアント代理店 -->
+        <div style="margin-bottom:12px;">
+          <label>クライアント代理店 <span class="req">*</span></label>
+          <select id="clientAgency" style="width:30%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:14px;">
+            <option value="" disabled selected>選択してください</option>
+            <!-- 【見本】マスタシートから動的に読み込み -->
+          </select>
+          <div id="err-clientAgency" class="error" aria-live="polite"></div>
+        </div>
+
+        <!-- 依頼フォーム選択 -->
+        <div style="margin-bottom:12px;">
+          <label>依頼フォーム（任意）</label>
+          <div style="display:flex; flex-direction:column; gap:8px; margin-top:6px;">
+            <label style="display:flex; align-items:center; font-size:14px; color:var(--ink); cursor:pointer;">
+              <input type="checkbox" id="accountRequest" style="width:auto; margin-right:8px;">
+              アカウント開設依頼フォーム
+            </label>
+            <label style="display:flex; align-items:center; font-size:14px; color:var(--ink); cursor:pointer;">
+              <input type="checkbox" id="tagRequest" style="width:auto; margin-right:8px;">
+              追加タグ発行依頼フォーム
+            </label>
+            <label style="display:flex; align-items:center; font-size:14px; color:var(--ink); cursor:pointer;">
+              <input type="checkbox" id="reportRequest" style="width:auto; margin-right:8px;">
+              レポート依頼フォーム
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 媒体別設定 -->
+      <div class="card">
+        <div class="media-header">
+          <h2 style="font-size:18px; margin:0;">媒体別設定</h2>
+          <button id="addMediaBtn" class="primary" type="button">＋ 媒体を追加</button>
+        </div>
+        <div id="mediaList" class="grid" style="gap:14px; margin-top:10px;"></div>
+        <div id="err-media" class="error" aria-live="polite" style="margin-top:6px;"></div>
+      </div>
+
+      <!-- 送信 -->
+      <div class="card">
+        <div class="footer">
+          <button id="sendBtn" class="primary" type="button">入稿シート作成</button>
+          <button id="resetBtn" type="button" class="ghost">リセット</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 【なぜ】媒体リストをグローバル変数で保持
+      // → サーバーから一度取得した媒体リストを、複数の媒体カード追加時に再利用するため
+      // → 毎回サーバーに問い合わせるのは非効率
+      let MEDIA_LIST = [];
+      let mediaLoaded = false;
+
+      // 【なぜ】クライアント代理店リストをグローバル変数で保持
+      // → マスタシートから取得したリストをキャッシュして再利用するため
+      let CLIENT_AGENCY_LIST = [];
+      let agencyLoaded = false;
+
+      const mediaListEl = document.getElementById('mediaList');
+      const addMediaBtn = document.getElementById('addMediaBtn');
+      const sendBtn     = document.getElementById('sendBtn');
+      const resetBtn    = document.getElementById('resetBtn');
+      const defaultAddMediaLabel = addMediaBtn.textContent;
+      addMediaBtn.disabled = true;
+
+      // 【なぜ】mediaCardsで各カードの状態を管理
+      // → 複数の媒体カードが存在するため、各カードのmediaIdとfieldsを個別に管理する必要がある
+      // → fields: {} は動的フィールドの値を格納（マスタから取得したフィールド名と値のペア）
+      let mediaCards = []; // [{key, mediaId, fields: {...}}]
+      let uid = 0;
+
+      function setError(id, msg) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = msg || "";
+      }
+
+      /**
+       * 媒体カードを追加
+       *
+       * 【なぜこの関数が必要か】
+       * - ユーザーが「＋ 媒体を追加」ボタンをクリックした際に、新しい媒体カードを生成するため
+       * - 複数の媒体を同時に処理できるようにするため（例: GoogleとYahooを同時に設定）
+       *
+       * 【重要な仕様変更】
+       * - 従来: 固定的なフィールド（MEDIA_FIELD_DEFS）を表示
+       * - 新仕様: 媒体選択時に、その媒体のマスタシートから動的にフィールドを取得して表示
+       */
+      function addMediaCard(prefill = {}) {
+        if (!MEDIA_LIST.length) {
+          setError('err-media', '媒体リストを読み込み中です');
+          return;
+        }
+
+        const key  = ++uid;
+        const card = document.createElement('div');
+        card.className   = 'media-card';
+        card.dataset.key = key;
+
+        // 【なぜ】アコーディオン構造に変更
+        // → 媒体カードを折りたたみ可能にして、複数媒体選択時の見やすさを向上
+        card.innerHTML = `
+          <div class="media-accordion-header active" data-accordion-header>
+            <div class="header-left">
+              <span data-media-label>媒体カード</span>
+            </div>
+            <div class="header-right">
+              <button type="button" class="red" data-act="remove">削除</button>
+              <span class="icon">▼</span>
+            </div>
+          </div>
+          <div class="media-accordion-content active" data-accordion-content>
+            <div class="media-accordion-content-inner">
+              <div>
+                <label>媒体 <span class="req">*</span></label>
+                <select data-field="mediaId" style="width:40%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:#fff; font-size:14px;">
+                  <option value="" disabled selected>選択してください</option>
+                  ${MEDIA_LIST.map(media => `<option value="${media}">${media}</option>`).join('')}
+                </select>
+                <div class="error" data-err="mediaId"></div>
+              </div>
+              <div class="loading-indicator" data-loading style="display:none;">マスタデータを読み込み中...</div>
+              <div class="dynamic-fields" data-dynamic-fields></div>
+            </div>
+          </div>
+        `;
+
+        // 【なぜ】stateオブジェクトで状態を管理
+        // → カードごとにmediaIdと動的フィールドの値を保持する必要があるため
+        const state = {
+          key,
+          mediaId: (prefill.mediaId || "").trim(),
+          fields: {} // 【重要】動的フィールドの値を格納（例: {"入札戦略": "目標コンバージョン単価"}）
+        };
+        mediaCards.push(state);
+
+        const mediaSel = card.querySelector('[data-field="mediaId"]');
+        const loadingIndicator = card.querySelector('[data-loading]');
+        const dynamicFieldsContainer = card.querySelector('[data-dynamic-fields]');
+        const accordionHeader = card.querySelector('[data-accordion-header]');
+        const accordionContent = card.querySelector('[data-accordion-content]');
+        const mediaLabel = card.querySelector('[data-media-label]');
+
+        // 【なぜ】アコーディオン開閉機能
+        // → 複数媒体選択時に、作業中でない媒体カードを閉じて画面をすっきりさせるため
+        accordionHeader.addEventListener('click', (e) => {
+          // 削除ボタンクリック時はアコーディオン開閉しない
+          if (e.target.matches('[data-act="remove"]')) {
+            return;
+          }
+
+          accordionHeader.classList.toggle('active');
+          accordionContent.classList.toggle('active');
+        });
+
+        // 【なぜ】媒体選択変更時にloadDynamicFieldsを呼び出す
+        // → 選択した媒体に応じて、マスタシートから最新のフィールド定義を取得するため
+        // → 媒体ごとに異なるフィールド構成を持つため、動的に取得する必要がある
+        mediaSel.addEventListener('change', () => {
+          const selectedMediaId = mediaSel.value;
+          state.mediaId = selectedMediaId;
+          state.fields = {}; // 【なぜ】リセット → 媒体が変わったら以前のフィールド値はクリア
+          setFieldError(card, 'mediaId', '');
+
+          // 【なぜ】ラベル更新
+          // → 媒体名をアコーディオンヘッダーに表示して、どの媒体のカードかすぐわかるようにする
+          mediaLabel.textContent = `媒体カード - ${selectedMediaId}`;
+
+          // マスタデータを取得して動的フィールドを生成
+          loadDynamicFields(selectedMediaId, card, dynamicFieldsContainer, loadingIndicator, state);
+        });
+
+        if (state.mediaId && MEDIA_LIST.includes(state.mediaId)) {
+          mediaSel.value = state.mediaId;
+          mediaLabel.textContent = `媒体カード - ${state.mediaId}`;
+          // 初期値がある場合は動的フィールドを読み込む
+          loadDynamicFields(state.mediaId, card, dynamicFieldsContainer, loadingIndicator, state);
+        }
+
+        // 削除ボタン
+        card.addEventListener('click', (e) => {
+          if (e.target.matches('[data-act="remove"]')) {
+            e.stopPropagation(); // アコーディオン開閉を防ぐ
+            mediaCards = mediaCards.filter(m => m.key !== key);
+            card.remove();
+          }
+        });
+
+        mediaListEl.appendChild(card);
+      }
+
+      /**
+       * マスタデータを取得して動的フィールドを生成
+       *
+       * 【なぜこの関数が必要か】
+       * - 媒体選択時に、サーバー（GAS）から対応するマスタシートのデータを取得するため
+       * - 非同期処理（google.script.run）を適切に処理し、ローディング表示とエラーハンドリングを行うため
+       *
+       * 【処理の流れ】
+       * 1. ローディング表示を開始
+       * 2. google.script.run.getMasterSheetData(mediaId)を呼び出す
+       * 3. 成功したら renderDynamicFields() でフィールドをレンダリング
+       * 4. 失敗したらエラー表示
+       */
+      function loadDynamicFields(mediaId, card, container, loadingIndicator, state) {
+        if (!mediaId) return;
+
+        // 【なぜ】ローディング表示
+        // → サーバーからデータ取得中であることをユーザーに伝えるため
+        // → ネットワーク状況によっては数秒かかる可能性がある
+        loadingIndicator.style.display = 'block';
+        container.innerHTML = '';
+
+        if (!window.google || !google.script || !google.script.run) {
+          loadingIndicator.style.display = 'none';
+          container.innerHTML = '<div class="error">マスタデータの取得に失敗しました（スクリプト実行環境ではありません）</div>';
+          return;
+        }
+
+        // 【なぜ】google.script.runでサーバー側のgetMasterSheetData()を呼び出す
+        // → ブラウザ側からGASの関数を非同期で実行するため
+        // → スプレッドシートの読み取りはサーバー側でしか行えない
+        google.script.run
+          .withSuccessHandler((result) => {
+            loadingIndicator.style.display = 'none';
+
+            if (!result.success) {
+              console.error('❌ マスタデータ取得失敗:', result.error);
+              container.innerHTML = `<div class="error">エラー: ${result.error}</div>`;
+              return;
+            }
+
+            console.log(`✅ マスタデータ取得成功: ${result.columns.length}個のフィールド`);
+            // 【なぜ】renderDynamicFieldsを呼び出す
+            // → 取得したマスタデータ（columns）をHTMLとして描画するため
+            renderDynamicFields(result.columns, container, state);
+          })
+          .withFailureHandler((err) => {
+            loadingIndicator.style.display = 'none';
+            container.innerHTML = `<div class="error">マスタデータの取得に失敗しました: ${err.message}</div>`;
+            console.error('getMasterSheetData失敗:', err);
+          })
+          .getMasterSheetData(mediaId);
+      }
+
+      /**
+       * フィールドをカテゴリ分けする
+       *
+       * 【なぜこの関数が必要か】
+       * - フィールドを論理的なグループに分けることで、UIを整理し、ユーザーが目的の項目を見つけやすくするため
+       * - フィールド名のキーワードから自動的にカテゴリを判定するため
+       */
+      function categorizeFields(columns) {
+        const categories = {
+          basic: { label: '📋 基本情報', fields: [], order: 1 },
+          budget: { label: '💰 予算設定', fields: [], order: 2 },
+          schedule: { label: '📅 配信期間・スケジュール', fields: [], order: 3 },
+          targeting: { label: '🎯 ターゲティング設定', fields: [], order: 4 },
+          bidding: { label: '⚙️ 入札・最適化設定', fields: [], order: 5 },
+          creative: { label: '🎨 クリエイティブ・配信面', fields: [], order: 6 },
+          other: { label: '📌 その他', fields: [], order: 7 }
+        };
+
+        columns.forEach(column => {
+          const header = column.header.toLowerCase();
+
+          if (header.includes('予算') || header.includes('日予算') || header.includes('kpi')) {
+            categories.budget.fields.push(column);
+          } else if (header.includes('開始') || header.includes('終了') || header.includes('時') || header.includes('分') || header.includes('スケジュール')) {
+            categories.schedule.fields.push(column);
+          } else if (header.includes('年齢') || header.includes('性別') || header.includes('地域') || header.includes('os') || header.includes('デバイス') || header.includes('ターゲ') || header.includes('セグメント') || header.includes('オーディエンス')) {
+            categories.targeting.fields.push(column);
+          } else if (header.includes('入札') || header.includes('課金') || header.includes('最適化') || header.includes('配信方法')) {
+            categories.bidding.fields.push(column);
+          } else if (header.includes('配信面') || header.includes('クリエイティブ') || header.includes('フォーマット') || header.includes('広告タイプ')) {
+            categories.creative.fields.push(column);
+          } else if (header.includes('キャンペーン') || header.includes('広告セット') || header.includes('広告グループ') || header.includes('広告no') || header.includes('目的') || header.includes('ステータス')) {
+            categories.basic.fields.push(column);
+          } else {
+            categories.other.fields.push(column);
+          }
+        });
+
+        // 空のカテゴリを除外して、順番通りに並べる
+        return Object.values(categories)
+          .filter(cat => cat.fields.length > 0)
+          .sort((a, b) => a.order - b.order);
+      }
+
+      /**
+       * フィールド要素を生成
+       *
+       * 【重要な変更】
+       * - originalHeader がある場合は、それを書き込み用のキーとして使用
+       * - header は表示用の名前（「 - 」区切り）
+       */
+      function createFieldElement(column, state) {
+        const { header, originalHeader, options, hasOptions } = column;
+
+        // 【なぜ】書き込み用のキーを決定
+        // → originalHeader がある場合（ペアシート由来）: 元のフィールド名（\n区切り）を使用
+        // → ない場合（マスタシート由来）: header をそのまま使用
+        const fieldKey = originalHeader || header;
+
+        const fieldItem = document.createElement('div');
+        fieldItem.className = 'field-item';
+
+        const label = document.createElement('label');
+        label.textContent = header; // 表示用は header（「 - 」区切り）
+        fieldItem.appendChild(label);
+
+        let inputElement;
+
+        if (hasOptions && options.length > 0) {
+          // プルダウン
+          inputElement = document.createElement('select');
+          const emptyOption = document.createElement('option');
+          emptyOption.value = '';
+          emptyOption.textContent = '選択してください';
+          emptyOption.disabled = true;
+          emptyOption.selected = true;
+          inputElement.appendChild(emptyOption);
+
+          options.forEach(optionValue => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.textContent = optionValue;
+            inputElement.appendChild(option);
+          });
+
+          inputElement.addEventListener('change', () => {
+            state.fields[fieldKey] = inputElement.value; // fieldKey を使用
+          });
+        } else {
+          // テキスト入力
+          inputElement = document.createElement('input');
+          inputElement.type = 'text';
+          inputElement.placeholder = '入力してください';
+
+          inputElement.addEventListener('input', () => {
+            state.fields[fieldKey] = inputElement.value; // fieldKey を使用
+          });
+        }
+
+        inputElement.dataset.fieldHeader = fieldKey; // fieldKey を保存
+        fieldItem.appendChild(inputElement);
+
+        return fieldItem;
+      }
+
+      /**
+       * アコーディオンを生成
+       */
+      function createAccordion(category, state) {
+        const accordion = document.createElement('div');
+        accordion.className = 'accordion';
+
+        // ヘッダー
+        const header = document.createElement('div');
+        header.className = 'accordion-header';
+        header.innerHTML = `
+          <span>${category.label} (${category.fields.length}項目)</span>
+          <span class="icon">▼</span>
+        `;
+
+        // コンテンツ
+        const content = document.createElement('div');
+        content.className = 'accordion-content active'; // 初期状態で開く
+
+        const contentInner = document.createElement('div');
+        contentInner.className = 'accordion-content-inner';
+
+        const fieldsGrid = document.createElement('div');
+        fieldsGrid.className = 'fields-grid';
+
+        category.fields.forEach(column => {
+          const fieldElement = createFieldElement(column, state);
+          fieldsGrid.appendChild(fieldElement);
+        });
+
+        contentInner.appendChild(fieldsGrid);
+        content.appendChild(contentInner);
+
+        // アコーディオン開閉
+        header.addEventListener('click', () => {
+          header.classList.toggle('active');
+          content.classList.toggle('active');
+        });
+
+        accordion.appendChild(header);
+        accordion.appendChild(content);
+
+        return accordion;
+      }
+
+      /**
+       * 動的フィールドをレンダリング（カテゴリ別・アコーディオン）
+       *
+       * 【改善内容】
+       * - フィールドをカテゴリごとにグループ化
+       * - アコーディオンで折りたたみ可能に
+       * - 各カテゴリ内は2カラムグリッドレイアウト
+       */
+      function renderDynamicFields(columns, container, state) {
+        console.log('🎨 renderDynamicFields 開始:', columns);
+
+        if (!columns || columns.length === 0) {
+          container.innerHTML = '<div class="muted" style="font-size:12px; margin-top:8px;">この媒体にはマスタフィールドがありません</div>';
+          return;
+        }
+
+        // フィールドをカテゴリ分け
+        const categories = categorizeFields(columns);
+        console.log('📂 カテゴリ分け完了:', categories);
+
+        // カテゴリごとにアコーディオンを生成
+        container.innerHTML = ''; // クリア
+        categories.forEach(category => {
+          const accordion = createAccordion(category, state);
+          container.appendChild(accordion);
+        });
+      }
+
+      function loadMediaList(force = false) {
+        if (!force && mediaLoaded) return;
+
+        addMediaBtn.disabled = true;
+        addMediaBtn.textContent = '読み込み中…';
+
+        let didFinish = false;
+        let timeoutId = null;
+        const finalizeLoading = () => {
+          if (didFinish) return;
+          didFinish = true;
+          if (timeoutId) clearTimeout(timeoutId);
+          addMediaBtn.disabled = false;
+          addMediaBtn.textContent = defaultAddMediaLabel;
+        };
+
+        if (!window.google || !google.script || !google.script.run) {
+          setError('err-media', '媒体リストの取得に失敗しました（スクリプト実行環境ではありません）');
+          finalizeLoading();
+          return;
+        }
+
+        timeoutId = setTimeout(() => {
+          console.error('媒体リストの取得がタイムアウトしました');
+          setError('err-media', '媒体リストの取得がタイムアウトしました');
+          finalizeLoading();
+        }, 15000);
+
+        google.script.run
+          .withSuccessHandler((list) => {
+            MEDIA_LIST = Array.isArray(list) ? list : [];
+            mediaLoaded = MEDIA_LIST.length > 0;
+
+            if (!mediaLoaded) {
+              setError('err-media', '媒体リストの取得に失敗しました');
+              finalizeLoading();
+              return;
+            }
+
+            setError('err-media', '');
+            finalizeLoading();
+
+            if (mediaCards.length === 0) {
+              addMediaCard();
+            }
+          })
+          .withFailureHandler((err) => {
+            console.error('媒体リストの取得に失敗しました', err);
+            setError('err-media', '媒体リストの取得に失敗しました');
+            finalizeLoading();
+          })
+          .getMediaList();
+      }
+
+      function loadClientAgencyList() {
+        if (agencyLoaded) return;
+
+        if (!window.google || !google.script || !google.script.run) {
+          console.error('クライアント代理店リストの取得に失敗しました（スクリプト実行環境ではありません）');
+          return;
+        }
+
+        google.script.run
+          .withSuccessHandler((list) => {
+            CLIENT_AGENCY_LIST = Array.isArray(list) ? list : [];
+            agencyLoaded = CLIENT_AGENCY_LIST.length > 0;
+
+            const selectEl = document.getElementById('clientAgency');
+            if (!selectEl) return;
+
+            // 既存のオプション（「選択してください」以外）を削除
+            while (selectEl.options.length > 1) {
+              selectEl.remove(1);
+            }
+
+            // 【見本】マスタシートから取得した代理店リストを追加
+            CLIENT_AGENCY_LIST.forEach(agency => {
+              const option = document.createElement('option');
+              option.value = agency;
+              option.textContent = agency;
+              selectEl.appendChild(option);
+            });
+          })
+          .withFailureHandler((err) => {
+            console.error('クライアント代理店リストの取得に失敗しました', err);
+            // エラーの場合は「選択してください」のみ表示される
+          })
+          .getClientAgencyList();
+      }
+
+      function setFieldError(card, field, msg) {
+        const el = card.querySelector(`[data-err="${field}"]`);
+        if (el) el.textContent = msg || "";
+      }
+
+      function validate() {
+        let ok = true;
+        const requestText = document.getElementById('requestText').value.trim();
+        const clientAgency = document.getElementById('clientAgency').value;
+
+        setError('err-requestText', '');
+        setError('err-clientAgency', '');
+        setError('err-media', '');
+
+        // 与件情報
+        if (!requestText) {
+          setError('err-requestText', '与件情報を入力してください');
+          ok = false;
+        }
+
+        // クライアント代理店
+        if (!clientAgency) {
+          setError('err-clientAgency', 'クライアント代理店を選択してください');
+          ok = false;
+        }
+
+        // 媒体カードが最低1つ必要
+        if (mediaCards.length === 0) {
+          setError('err-media', '最低1つの媒体カードを追加してください');
+          ok = false;
+        }
+
+        // 【修正】各カードの必須項目チェック - エラーメッセージを必ずクリア
+        for (const cardEl of mediaListEl.children) {
+          const key = Number(cardEl.dataset.key);
+          const row = mediaCards.find(m => m.key === key);
+          if (!row) continue;
+
+          const mediaValue = (row.mediaId || '').trim();
+          if (!mediaValue) {
+            setFieldError(cardEl, 'mediaId', '媒体を選択してください');
+            ok = false;
+          } else {
+            // 【重要】正しい値が入っている場合は、エラーメッセージをクリア
+            setFieldError(cardEl, 'mediaId', '');
+            row.mediaId = mediaValue;
+          }
+        }
+
+        return ok;
+      }
+
+
+      /**
+       * 送信用のペイロードを構築
+       *
+       * 【なぜこの関数が必要か】
+       * - フォームに入力された全データを、サーバー（receivePlan関数）に送信する形式に整形するため
+       * - 複数の媒体カードの情報を配列としてまとめる必要があるため
+       *
+       * 【重要な仕様変更】
+       * - 従来: 固定的なフィールド（dueDate, placement等）を送信
+       * - 新仕様: 動的フィールド（state.fields）を展開して送信
+       *   → 例: { mediaId: "Googleリスティング", "入札戦略": "目標コンバージョン単価", "デバイス": "PC" }
+       *
+       * 【なぜ ...rest.fields で展開するのか】
+       * - rest.fields は { "入札戦略": "値1", "デバイス": "値2" } のようなオブジェクト
+       * - スプレッド構文で展開することで、フィールド名がプロパティ名になる
+       * - これにより、サーバー側（receivePlan）で payload.mediaList[0]["入札戦略"] のようにアクセスできる
+       */
+      function buildPayload() {
+        const requestText = document.getElementById('requestText').value.trim();
+        const clientAgency = document.getElementById('clientAgency').value;
+
+        // 【なぜこのログが必要か】
+        // - フォームで入力された動的フィールドの値が正しく state.fields に保存されているかを確認するため
+        // - 問題: 「ディスカバリー運用記入」列に値が入らない → まず入力値がstate.fieldsに保存されているか確認
+        // - このログで mediaCards[].fields が空オブジェクト {} だった場合、フォームでの値保存が失敗している
+        // - 正常な場合: fields: { "キャンペーン目標": "売上", "入札戦略": "目標コンバージョン単価" } のような形
+        console.log('📦 mediaCards:', JSON.stringify(mediaCards, null, 2));
+
+        const payload = {
+          requestText,
+          clientAgency,
+          // 【なぜ】mediaCardsをmapで変換
+          // → 各カードのmediaIdとfieldsを、送信用の形式に整形するため
+          mediaList: mediaCards.map(({ key, ...rest }) => {
+            // 【なぜこのログが必要か】
+            // - スプレッド構文 ...rest.fields が正しく動作しているかを確認するため
+            // - 問題: rest.fields のプロパティが result に展開されているか確認
+            // - 正常な場合: result は { mediaId: "Googleリスティング", "キャンペーン目標": "売上", ... } のような形
+            // - もし result に mediaId しかない場合、スプレッド構文が失敗しているか、rest.fields が空
+            const result = {
+              mediaId: rest.mediaId,
+              ...rest.fields // 【重要】動的フィールドの値を展開（例: {"入札戦略": "値", "デバイス": "値"}）
+            };
+            console.log(`  - カード変換: key=${key}, mediaId=${rest.mediaId}, fields=`, rest.fields, '→ result=', result);
+            return result;
+          })
+        };
+
+        // 【なぜこのログが必要か】
+        // - サーバーに送信される直前のデータ構造を確認するため
+        // - 問題: payload.mediaList[].{フィールド名} が正しく含まれているか確認
+        // - 正常な場合: payload.mediaList[0] は { mediaId: "...", "キャンペーン目標": "...", ... } のような形
+        // - もし payload.mediaList[0] に動的フィールドが含まれていない場合、上記の変換処理が失敗している
+        // - このログが正常でもサーバー側で値が入らない場合、サーバー側の抽出処理に問題がある
+        console.log('📤 送信ペイロード:', JSON.stringify(payload, null, 2));
+
+        return payload;
+      }
+
+      // 初期化: 媒体追加ボタンのイベント設定と初期カード追加
+      addMediaBtn.addEventListener('click', () => {
+        if (!MEDIA_LIST.length) {
+          loadMediaList(true);
+          return;
+        }
+        addMediaCard();
+      });
+      loadMediaList();
+      loadClientAgencyList();
+
+      sendBtn.addEventListener('click', () => {
+        if (!validate()) return;
+        const payload = buildPayload();
+
+        // 【なぜ】ローディングオーバーレイを表示
+        // → 処理時間が長い（複数媒体で1-3分かかる）ため、ユーザーに進捗を示す必要がある
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const loadingMessage = document.getElementById('loadingMessage');
+        const loadingEstimate = document.getElementById('loadingEstimate');
+
+        // 【なぜ】媒体数から推定時間を計算
+        // → 1媒体あたり約10-20秒（AI解析が主な時間）
+        const mediaCount = payload.mediaList ? payload.mediaList.length : 0;
+        const estimatedSeconds = mediaCount * 15; // 平均15秒/媒体
+        const estimatedMinutes = Math.ceil(estimatedSeconds / 60);
+
+        loadingMessage.textContent = `${mediaCount}件の媒体を処理中...`;
+        loadingEstimate.textContent = `推定時間: 約${estimatedMinutes}分`;
+        loadingOverlay.classList.add('active');
+
+        sendBtn.disabled = true;
+        sendBtn.textContent = '送信中…';
+        google.script.run
+          .withSuccessHandler((res) => {
+            // 【なぜ】ローディングオーバーレイを非表示
+            // → 処理完了
+            loadingOverlay.classList.remove('active');
+
+            sendBtn.disabled = false;
+            sendBtn.textContent = '入稿シート作成';
+
+            // 結果の分析
+            let message = '';
+            const isSuccess = res.ok;
+
+            if (!isSuccess) {
+              // 成功が1件もない（全失敗または全スキップ）
+              message = `エラー: 書き込みに成功した媒体がありません（ID: ${res.id}）\n\n`;
+            } else if (res.hasPartialErrors) {
+              // 部分的成功
+              message = `処理完了（一部エラーあり）（ID: ${res.id}）\n\n`;
+            } else {
+              // 全成功
+              message = `保存完了（ID: ${res.id}）\n\n`;
+            }
+
+            if (res.results) {
+              const { success, skipped, errors } = res.results;
+
+              // 成功件数
+              if (success && success.length > 0) {
+                message += `✅ 成功: ${success.length}件\n`;
+                message += success.map(m => `  ・${m.mediaId}`).join('\n') + '\n';
+              }
+
+              // スキップ件数
+              if (skipped && skipped.length > 0) {
+                message += `\n⚠️ スキップ: ${skipped.length}件\n`;
+                message += skipped.map(m => `  ・${m.mediaId} (${m.reason})`).join('\n') + '\n';
+              }
+
+              // エラー件数
+              if (errors && errors.length > 0) {
+                message += `\n❌ エラー: ${errors.length}件\n`;
+                message += errors.map(m => `  ・${m.mediaId}: ${m.error}`).join('\n') + '\n';
+              }
+            }
+
+            // 備考
+            if (res.unmapped_notes) {
+              message += `\n📝 備考:\n${res.unmapped_notes}`;
+            }
+
+            if (!isSuccess) {
+              message += `\n詳細はログを確認してください。`;
+            }
+
+            alert(message);
+
+            // 成功が1件以上あり、かつ部分エラーがない場合のみダイアログを閉じる
+            if (isSuccess && !res.hasPartialErrors) {
+              google.script.host.close();
+            }
+          })
+          .withFailureHandler((err) => {
+            // 【なぜ】ローディングオーバーレイを非表示
+            // → エラー発生時
+            loadingOverlay.classList.remove('active');
+
+            alert(`送信エラー: ${err && err.message ? err.message : err}`);
+            sendBtn.disabled = false;
+            sendBtn.textContent = '入稿シート作成';
+          })
+          .receivePlan(payload);
+      });
+
+      // 【追加】与件情報入力時にエラーメッセージをクリア
+      document.getElementById('requestText').addEventListener('input', () => {
+        if (document.getElementById('requestText').value.trim()) {
+          setError('err-requestText', '');
+        }
+      });
+
+      // 【追加】クライアント代理店選択時にエラーメッセージをクリア
+      document.getElementById('clientAgency').addEventListener('change', () => {
+        if (document.getElementById('clientAgency').value) {
+          setError('err-clientAgency', '');
+        }
+      });
+
+      resetBtn.addEventListener('click', () => {
+        document.getElementById('requestText').value = '';
+        document.getElementById('clientAgency').value = '';
+        setError('err-requestText', '');
+        setError('err-clientAgency', '');
+        setError('err-media', '');
+        mediaListEl.innerHTML = '';
+        mediaCards = []; uid = 0;
+        if (mediaLoaded) {
+          addMediaCard();
+        } else {
+          loadMediaList();
+        }
+      });
+    </script>
+  </body>
+</html>

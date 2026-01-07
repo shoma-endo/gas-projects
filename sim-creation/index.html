@@ -1,0 +1,618 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>SIM 入力フォーム</title>
+    <style>
+      :root {
+        --bg:#f7f8fa;
+        --card:#fff;
+        --ink:#1f2937;
+        --muted:#6b7280;
+        --pri:#2563eb;
+        --red:#dc2626;
+        --line:#e5e7eb;
+      }
+      body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+             color:var(--ink); background:var(--bg); }
+      .wrap { max-width:880px; margin:auto; padding:20px; }
+      h1 { font-size:22px; margin:0 0 14px; }
+      .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+              padding:14px; margin-bottom:14px; }
+      .grid { display:grid; gap:10px; }
+      .g3   { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+      label { font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+      input[type="number"], input[type="date"], input[type="text"], select {
+        width:80%; padding:8px 10px; border:1px solid var(--line);
+        border-radius:8px; background:#fff; font-size:14px;
+      }
+      .radio { display:flex; gap:10px; align-items:center; }
+      .radio label { margin:0 6px 0 2px; color:var(--ink); font-size:14px; }
+      button { appearance:none; border:1px solid var(--line); background:#fff;
+               border-radius:10px; padding:8px 12px; font-size:14px; cursor:pointer; }
+      button.primary { background:var(--pri); color:#fff; border-color:var(--pri); }
+      button.ghost   { background:transparent; }
+      button.red     { background:var(--red); color:#fff; border-color:var(--red); }
+      button:disabled { opacity:0.5; cursor:not-allowed; }
+      .loading { color:var(--muted); font-size:12px; margin-top:4px; }
+      .media-card { border:1px dashed var(--line); border-radius:10px; padding:10px; }
+      .media-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+      .muted { color:var(--muted); }
+      .error { color:var(--red); font-size:12px; margin-top:4px; }
+      .total { font-weight:600; }
+      .footer { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+      .divider { height:1px; background:var(--line); margin:10px 0; }
+      @media (max-width:720px) { .g3 { grid-template-columns:1fr; } }
+      .req {
+        color: var(--red);
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <!-- 基本情報 -->
+      <div class="card">
+        <h2 style="font-size:18px; margin:0 0 12px;">基本情報</h2>
+        <div class="grid g3">
+          <div>
+            <label>出力シート</label>
+            <div class="radio">
+              <input type="radio" id="out-video" name="outputType" value="video" checked />
+              <label for="out-video">動画</label>
+              <input type="radio" id="out-static" name="outputType" value="static" />
+              <label for="out-static">静止画</label>
+            </div>
+          </div>
+        </div>
+        <div class="grid g3" style="margin-top:12px;">
+          <div>
+            <label>総マージン（%）<span class="req">*</span></label>
+            <input id="marginPct" type="number" min="0" max="50" step="0.1" placeholder="例：15" />
+            <div id="err-margin" class="error" aria-live="polite"></div>
+          </div>
+
+
+        </div>
+        <div class="grid g3" style="margin-top:12px;">
+          <div>
+            <label>開始日 <span class="req">*</span></label>
+            <input id="startDate" type="date" />
+          </div>
+          <div>
+            <label>終了日 <span class="req">*</span></label>
+            <input id="endDate" type="date" />
+          </div>
+          <div style="align-self:end;">
+            <div id="err-period" class="error" aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 媒体別設定 -->
+      <div class="card">
+        <div class="media-header">
+          <h2 style="font-size:18px; margin:0;">媒体別設定</h2>
+          <button id="addMediaBtn" class="primary" type="button">＋ 媒体を追加</button>
+        </div>
+        <div class="muted" style="margin-top:6px;">※ 媒体/メニュー/KPIの選択肢は「動画」or「静止画」シートから自動参照します。</div>
+        <div id="loadingStatus" class="loading" style="display:none;"></div>
+        <div id="mediaList" class="grid" style="gap:14px;"></div>
+        <div class="divider"></div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <div class="muted">合計予算：</div>
+          <div id="totalBudget" class="total">¥0</div>
+        </div>
+        <div id="err-media" class="error" aria-live="polite" style="margin-top:6px;"></div>
+      </div>
+
+      <!-- 送信 -->
+      <div class="card">
+        <div class="footer">
+          <button id="sendBtn" class="primary" type="button">SIM作成</button>
+          <button id="resetBtn" type="button" class="ghost">リセット</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // サーバー側から埋め込まれた初期データを取得
+      let MEDIA_MENUS = {};
+      let menusLoaded = false;
+      let currentRequestId = 0; // リクエストIDでレース条件を防止
+      let isLoadingMenus = false; // ロード中フラグ
+
+      // サーバー側から埋め込まれた初期データ（存在する場合）
+      <? if (initialData) { ?>
+      try {
+        const parsedData = <?= initialData ?>;
+        // データが空のオブジェクトでない場合のみ設定
+        if (parsedData && typeof parsedData === 'object' && Object.keys(parsedData).length > 0) {
+          MEDIA_MENUS = parsedData;
+          menusLoaded = true;
+          console.log('初期データを埋め込みから取得:', MEDIA_MENUS);
+        } else {
+          console.log('初期データが空のため、スキップします');
+          menusLoaded = false;
+        }
+      } catch (e) {
+        console.error('初期データの解析に失敗:', e);
+        menusLoaded = false;
+      }
+      <? } ?>
+
+      // 初期出力タイプ（存在する場合）
+      <? if (initialOutputType) { ?>
+      const initialOutputTypeFromServer = '<?= initialOutputType ?>';
+      <? } else { ?>
+      const initialOutputTypeFromServer = 'video';
+      <? } ?>
+
+      const mediaListEl   = document.getElementById('mediaList');
+      const addMediaBtn   = document.getElementById('addMediaBtn');
+      const totalBudgetEl = document.getElementById('totalBudget');
+      const sendBtn       = document.getElementById('sendBtn');
+      const resetBtn      = document.getElementById('resetBtn');
+      const loadingStatusEl = document.getElementById('loadingStatus');
+
+      let mediaCards = []; // [{key, mediaId, menu, target, budget, kpi}]
+      let uid = 0;
+
+      const yen = n => "¥" + (Number(n) || 0).toLocaleString('ja-JP');
+      function calcTotal() {
+        totalBudgetEl.textContent = yen(mediaCards.reduce((a, c) => a + (Number(c.budget) || 0), 0));
+      }
+      function setError(id, msg) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = msg || "";
+      }
+
+      function addMediaCard(prefill = {}) {
+        // MEDIA_MENUSが空または未初期化の場合はカードを作成しない
+        if (!MEDIA_MENUS || Object.keys(MEDIA_MENUS).length === 0) {
+          console.log('MEDIA_MENUSが空のため、カードの作成をスキップします');
+          return;
+        }
+
+        const key  = ++uid;
+        const card = document.createElement('div');
+        card.className   = 'media-card';
+        card.dataset.key = key;
+        card.innerHTML = `
+          <div class="media-header">
+            <div class="muted">媒体カード</div>
+            <button type="button" class="red" data-act="remove">削除</button>
+          </div>
+          <div class="grid g3">
+            <div>
+              <label>媒体 <span class="req">*</span></label>
+              <select data-field="mediaId">
+                <option value="" disabled selected>選択してください</option>
+                ${Object.entries(MEDIA_MENUS).map(([id, obj]) => {
+                  const name = obj && obj.name ? obj.name : '';
+                  return name ? `<option value="${id}">${name}</option>` : '';
+                }).filter(opt => opt).join('')}
+              </select>
+              <div class="error" data-err="mediaId"></div>
+            </div>
+            <div>
+              <label>メニュー <span class="req">*</span></label>
+              <select data-field="menu" disabled>
+                <option value="" disabled selected>媒体を先に選択</option>
+              </select>
+              <div class="error" data-err="menu"></div>
+            </div>
+            <div>
+              <label>KPI <span class="req">*</span></label>
+              <select data-field="kpi" disabled>
+                <option value="" disabled selected>メニューを先に選択</option>
+              </select>
+              <div class="error" data-err="kpi"></div>
+            </div>
+            <div>
+              <label>ターゲット</label>
+              <input data-field="target" type="text" placeholder="例：20〜30代女性" />
+              <div class="error" data-err="target"></div>
+            </div>
+            <div>
+              <label>媒体別 予算（円）<span class="req">*</span></label>
+              <input data-field="budget" type="number" min="0" step="1000" placeholder="例：300000" />
+              <div class="error" data-err="budget"></div>
+            </div>
+          </div>
+        `;
+
+        const state = { key, mediaId: "", menu: "", target: "", budget: 0, kpi: "" };
+        mediaCards.push(state);
+
+        const mediaSel = card.querySelector('[data-field="mediaId"]');
+        const menuSel  = card.querySelector('[data-field="menu"]');
+        const targetIn = card.querySelector('[data-field="target"]');
+        const budgetIn = card.querySelector('[data-field="budget"]');
+        const kpiSel   = card.querySelector('[data-field="kpi"]');
+
+        mediaSel.addEventListener('change', () => {
+          state.mediaId = mediaSel.value;
+          state.menu = "";
+          state.kpi = "";
+          
+          // メニュー選択肢をリセット・更新
+          menuSel.innerHTML = `<option value="" disabled selected>選択してください</option>`;
+          menuSel.disabled = !state.mediaId;
+          
+          // KPI選択肢をリセット・無効化
+          kpiSel.innerHTML = `<option value="" disabled selected>メニューを先に選択</option>`;
+          kpiSel.disabled = true;
+          
+          if (state.mediaId && MEDIA_MENUS[state.mediaId]) {
+            Object.entries(MEDIA_MENUS[state.mediaId].menus).forEach(([menuKey, menuData]) => {
+              const opt = document.createElement('option');
+              opt.value = menuKey;
+              opt.textContent = menuData.name;
+              menuSel.appendChild(opt);
+            });
+          }
+          
+          setFieldError(card, 'mediaId', '');
+          setFieldError(card, 'menu', '');
+          setFieldError(card, 'kpi', '');
+        });
+
+        menuSel.addEventListener('change', () => {
+          state.menu = menuSel.value || "";
+          state.kpi = "";
+          
+          // KPI選択肢をリセット・更新
+          kpiSel.innerHTML = `<option value="" disabled selected>選択してください</option>`;
+          kpiSel.disabled = !state.menu;
+          
+          if (state.menu && state.mediaId && MEDIA_MENUS[state.mediaId] && MEDIA_MENUS[state.mediaId].menus[state.menu]) {
+            const kpis = MEDIA_MENUS[state.mediaId].menus[state.menu].kpis;
+            kpis.forEach(kpi => {
+              const opt = document.createElement('option');
+              opt.value = kpi;
+              opt.textContent = kpi;
+              kpiSel.appendChild(opt);
+            });
+          }
+          
+          setFieldError(card, 'menu', '');
+          setFieldError(card, 'kpi', '');
+        });
+
+        targetIn.addEventListener('input', () => {
+          state.target = targetIn.value.trim();
+          setFieldError(card, 'target', '');
+        });
+
+        budgetIn.addEventListener('input', () => {
+          state.budget = Number(budgetIn.value) || 0;
+          calcTotal();
+          setFieldError(card, 'budget', '');
+        });
+
+        kpiSel.addEventListener('change', () => {
+          state.kpi = kpiSel.value || "";
+          setFieldError(card, 'kpi', '');
+        });
+
+        card.addEventListener('click', (e) => {
+          if (e.target.matches('[data-act="remove"]')) {
+            mediaCards = mediaCards.filter(m => m.key !== key);
+            card.remove();
+            calcTotal();
+          }
+        });
+
+        mediaListEl.appendChild(card);
+        calcTotal();
+      }
+
+      function setFieldError(card, field, msg) {
+        const el = card.querySelector(`[data-err="${field}"]`);
+        if (el) el.textContent = msg || "";
+      }
+
+      function validate() {
+        let ok       = true;
+        const margin = Number(document.getElementById('marginPct').value);
+        const start  = document.getElementById('startDate').value;
+        const end    = document.getElementById('endDate').value;
+
+        setError('err-margin', '');
+        setError('err-period', '');
+        setError('err-media', '');
+
+        // マージン（0〜50%）
+        if (!(margin >= 0 && margin <= 50)) {
+          setError('err-margin', '0〜50%の範囲で入力してください');
+          ok = false;
+        }
+
+        // 期間
+        if (!start || !end || new Date(start) > new Date(end)) {
+          setError('err-period', '開始日と終了日を正しく指定してください');
+          ok = false;
+        }
+
+        // 媒体カードが最低1つ必要
+        if (mediaCards.length === 0) {
+          setError('err-media', '最低1つの媒体カードを追加してください');
+          ok = false;
+        }
+
+        // 各カードの必須項目チェック
+        for (const cardEl of mediaListEl.children) {
+          const key = Number(cardEl.dataset.key);
+          const row = mediaCards.find(m => m.key === key);
+          if (!row) continue;
+
+          if (!row.mediaId) {
+            setFieldError(cardEl, 'mediaId', '媒体を選択してください');
+            ok = false;
+          }
+          if (!row.menu) {
+            setFieldError(cardEl, 'menu', 'メニューを選択してください');
+            ok = false;
+          }
+          if (!(row.budget > 0)) {
+            setFieldError(cardEl, 'budget', '1以上の金額を入力してください');
+            ok = false;
+          }
+          if (!row.kpi) {
+            setFieldError(cardEl, 'kpi', 'KPIを選択してください');
+            ok = false;
+          }
+        }
+
+        return ok;
+      }
+
+
+      function buildPayload() {
+        const outputType = document.querySelector('input[name="outputType"]:checked').value;
+        const marginPct  = Number(document.getElementById('marginPct').value);
+        const start      = document.getElementById('startDate').value;
+        const end        = document.getElementById('endDate').value;
+
+        return {
+          outputType,
+          marginPct,
+          period: { start, end },
+          mediaPlans: mediaCards.map(row => ({
+            media:  MEDIA_MENUS[row.mediaId]?.name || row.mediaId,
+            menu:   MEDIA_MENUS[row.mediaId]?.menus[row.menu]?.name || row.menu,
+            target: row.target,
+            budget: Number(row.budget) || 0,
+            kpi:    row.kpi || ""
+          }))
+        };
+      }
+
+      function tryInitForm() {
+        // menusLoadedがtrueかつ、MEDIA_MENUSに実際にデータがある場合のみフォームを初期化
+        if (menusLoaded && MEDIA_MENUS && Object.keys(MEDIA_MENUS).length > 0) {
+          if (!addMediaBtn.dataset.bound) {
+            addMediaBtn.addEventListener('click', () => addMediaCard());
+            addMediaBtn.dataset.bound = "true";
+          }
+          addMediaCard();
+        }
+      }
+
+      function fetchMediaMenusByOutput(outputType, requestId, showLoading = true) {
+        // レース条件防止：古いリクエストは無視
+        if (requestId !== currentRequestId) {
+          console.log('古いリクエストを無視:', requestId, '現在:', currentRequestId);
+          return;
+        }
+
+        isLoadingMenus = true;
+        if (showLoading) {
+          addMediaBtn.disabled = true;
+          addMediaBtn.textContent = '読み込み中...';
+          if (loadingStatusEl) {
+            loadingStatusEl.style.display = 'block';
+            loadingStatusEl.textContent = '媒体データを読み込んでいます...';
+          }
+        }
+        
+        google.script.run
+          .withSuccessHandler((data) => {
+            // レース条件防止：リクエストIDを再確認
+            if (requestId !== currentRequestId) {
+              console.log('古いリクエストの結果を無視:', requestId, '現在:', currentRequestId);
+              return;
+            }
+            
+            MEDIA_MENUS = data || {};
+            console.log('取得したデータ:', MEDIA_MENUS);
+            menusLoaded = true;
+            isLoadingMenus = false;
+            addMediaBtn.disabled = false;
+            addMediaBtn.textContent = '＋ 媒体を追加';
+            if (loadingStatusEl) {
+              loadingStatusEl.style.display = 'none';
+            }
+            
+            // 既存のカードの選択肢を更新
+            updateMediaCardOptions();
+            // カードが存在しない場合は新規作成
+            if (mediaCards.length === 0) {
+              tryInitForm();
+            }
+          })
+          .withFailureHandler((err) => {
+            // レース条件防止：リクエストIDを再確認
+            if (requestId !== currentRequestId) {
+              console.log('古いリクエストのエラーを無視:', requestId, '現在:', currentRequestId);
+              return;
+            }
+            
+            isLoadingMenus = false;
+            addMediaBtn.disabled = false;
+            addMediaBtn.textContent = '＋ 媒体を追加';
+            if (loadingStatusEl) {
+              loadingStatusEl.style.display = 'none';
+            }
+            console.error("getMediaMenus error:", err);
+            // エラー時もフォームは使用可能にする
+            if (!menusLoaded) {
+              alert("媒体/メニュー情報を取得できませんでした。\n" +
+                    "おそらくスクリプトの承認が未完了です。\n\n" +
+                    "対処方法: スプレッドシートの [拡張機能 > Apps Script] を開き、" +
+                    "エディタ上で関数を一度実行して権限を許可してください。");
+            }
+          })
+          .getMediaMenus(outputType, false); // forceRefresh = false（キャッシュを使用）
+      }
+
+      // 既存の媒体カードの選択肢を更新する関数
+      function updateMediaCardOptions() {
+        for (const cardEl of mediaListEl.children) {
+          const key = Number(cardEl.dataset.key);
+          const row = mediaCards.find(m => m.key === key);
+          if (!row) continue;
+
+          const mediaSel = cardEl.querySelector('[data-field="mediaId"]');
+          const menuSel = cardEl.querySelector('[data-field="menu"]');
+          const kpiSel = cardEl.querySelector('[data-field="kpi"]');
+          
+          if (mediaSel) {
+            const currentMediaId = mediaSel.value;
+            // 媒体選択肢を更新
+            const currentMediaOption = mediaSel.options[mediaSel.selectedIndex];
+            const currentMediaText = currentMediaOption ? currentMediaOption.text : '';
+            
+            mediaSel.innerHTML = `<option value="" disabled selected>選択してください</option>`;
+            Object.entries(MEDIA_MENUS).forEach(([id, obj]) => {
+              const opt = document.createElement('option');
+              opt.value = id;
+              opt.textContent = obj.name;
+              if (id === currentMediaId || obj.name === currentMediaText) {
+                opt.selected = true;
+              }
+              mediaSel.appendChild(opt);
+            });
+
+            // メニューとKPIも更新
+            if (currentMediaId && MEDIA_MENUS[currentMediaId]) {
+              menuSel.disabled = false;
+              menuSel.innerHTML = `<option value="" disabled selected>選択してください</option>`;
+              Object.entries(MEDIA_MENUS[currentMediaId].menus).forEach(([menuKey, menuData]) => {
+                const opt = document.createElement('option');
+                opt.value = menuKey;
+                opt.textContent = menuData.name;
+                if (menuKey === row.menu) {
+                  opt.selected = true;
+                }
+                menuSel.appendChild(opt);
+              });
+
+              if (row.menu && MEDIA_MENUS[currentMediaId].menus[row.menu]) {
+                kpiSel.disabled = false;
+                kpiSel.innerHTML = `<option value="" disabled selected>選択してください</option>`;
+                MEDIA_MENUS[currentMediaId].menus[row.menu].kpis.forEach(kpi => {
+                  const opt = document.createElement('option');
+                  opt.value = kpi;
+                  opt.textContent = kpi;
+                  if (kpi === row.kpi) {
+                    opt.selected = true;
+                  }
+                  kpiSel.appendChild(opt);
+                });
+              }
+            }
+          }
+        }
+      }
+
+      // 初期ロード時：埋め込みデータがあれば使用、なければ取得
+      let initialOutputType;
+      <? if (initialOutputType) { ?>
+      initialOutputType = initialOutputTypeFromServer;
+      // 出力タイプのラジオボタンを初期値に設定
+      const radio = document.querySelector(`input[name="outputType"][value="${initialOutputTypeFromServer}"]`);
+      if (radio) {
+        radio.checked = true;
+      }
+      <? } else { ?>
+      initialOutputType = document.querySelector('input[name="outputType"]:checked').value;
+      <? } ?>
+
+      // 初期データが埋め込まれている場合は即座にフォームを初期化
+      if (menusLoaded) {
+        tryInitForm();
+        // バックグラウンドで最新データを取得して差し替え（ローディング表示なし）
+        setTimeout(() => {
+          currentRequestId++;
+          fetchMediaMenusByOutput(initialOutputType, currentRequestId, false);
+        }, 100);
+      } else {
+        // 初期データが埋め込まれていない場合は取得（ローディング表示あり）
+        currentRequestId++;
+        fetchMediaMenusByOutput(initialOutputType, currentRequestId, true);
+      }
+
+
+      // 出力タイプ変更時：媒体メニュー再取得＆カードをリセット
+      let currentOutputType = initialOutputType; // 現在の出力タイプを追跡
+      document.querySelectorAll('input[name="outputType"]').forEach(radio => {
+        radio.addEventListener('change', () => {
+          // ローディング中は変更を無視して前の選択に戻す
+          if (isLoadingMenus) {
+            document.querySelector(`input[name="outputType"][value="${currentOutputType}"]`).checked = true;
+            return;
+          }
+          
+          const outputType = document.querySelector('input[name="outputType"]:checked').value;
+          currentOutputType = outputType; // 現在の出力タイプを更新
+          // 既存カードをクリアして最新候補で初期化
+          mediaListEl.innerHTML = '';
+          mediaCards = []; uid = 0;
+          calcTotal();
+          menusLoaded = false;
+          // 新しいリクエストIDを発行してレース条件を防止（ローディング表示あり）
+          currentRequestId++;
+          fetchMediaMenusByOutput(outputType, currentRequestId, true);
+        });
+      });
+
+      sendBtn.addEventListener('click', () => {
+        if (!validate()) return;
+        const payload = buildPayload();
+        sendBtn.disabled = true;
+        sendBtn.textContent = '送信中…';
+        google.script.run
+          .withSuccessHandler((res) => {
+            alert(`保存しました（ID: ${res.id}）`);
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'SIM作成';
+            // ダイアログを自動的に閉じる
+            google.script.host.close();
+          })
+          .withFailureHandler((err) => {
+            alert(`送信エラー: ${err && err.message ? err.message : err}`);
+            sendBtn.disabled = false;
+            sendBtn.textContent = 'SIM作成';
+          })
+          .receivePlan(payload);
+      });
+
+      resetBtn.addEventListener('click', () => {
+        document.getElementById('marginPct').value = '';
+        document.getElementById('startDate').value = '';
+        document.getElementById('endDate').value   = '';
+        setError('err-margin', ''); setError('err-period', ''); setError('err-media', '');
+        mediaListEl.innerHTML = '';
+        mediaCards = []; uid = 0;
+        calcTotal();
+        // リセット後もメニューデータは保持してフォームを初期化
+        if (menusLoaded) {
+        addMediaCard();
+        }
+      });
+    </script>
+  </body>
+</html>
