@@ -47,3 +47,47 @@ clasp clone <YOUR_SCRIPT_ID>
 
 *   **機密情報の管理**: APIキー、トークン、Webhook URL、特定の環境に依存するID（スプレッドシートIDなど）はコードにハードコーディングせず、**スクリプトプロパティ (Script Properties)** を使用してください。
 *   **プッシュとプル**: コードの変更は `clasp push` でGASエディタに反映し、ブラウザ上での変更は `clasp pull` でローカルに取り込んでください。
+了解。以下は **README.md にそのまま貼り付け可能な日本語版 Markdown です**（最小限のブランチ命名ガイドライン）。
+
+## 📌 ブランチ命名ルール（最低限ガイドライン）
+
+このリポジトリは複数の Google Apps Script プロジェクトを含むモノリポ構成です。
+どのプロジェクトに対する変更か判別しやすくするため、ブランチ作成時に以下の命名ガイドラインを推奨します。
+
+### ✏️ 命名フォーマット（ガイドライン）
+
+```
+<project-name>/<type>/<brief-description>
+```
+
+#### 各要素の意味
+
+* **project-name**
+  対象プロジェクトのフォルダ名
+  例: `instagram-base-integration`、`sim-creation`、`youtube-data-acquisition` など
+
+* **type**（任意）
+  変更種別を簡潔な英語で表す
+
+  * `feat` : 新機能
+  * `fix` : バグ修正
+  * `refactor` : リファクタリング
+  * `docs` : ドキュメント
+  * `chore` : 保守／設定変更
+
+* **brief-description**
+  短い説明（ハイフン区切り）
+
+#### 例
+
+```
+instagram-base-integration/feat/add-metrics-sync
+sim-creation/fix/budget-calculation-error
+youtube-data-acquisition/docs/update-readme
+```
+
+## ⚠️ 運用における注意
+* ブランチ名は **対象プロジェクトが何か一目で分かること** を優先してください。
+* `type` や `brief-description` は理解を助けるため推奨しますが、必須ではありません。
+
+これは厳密なルールではなく、**運用上の目安**です。必要に応じて柔軟に運用してください。
