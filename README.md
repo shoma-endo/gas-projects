@@ -14,6 +14,10 @@
 | **lark-ocr** | **Lark OCR連携検証**<br>Lark (Lark Suite) のAPIとGemini APIを組み合わせて、アップロードされたファイルのOCR処理や解析を行うための検証用プロジェクトです。 |
 | **sim-creation** | **広告シミュレーション作成ツール**<br>動画・静止画広告の予算、CPM、CTRなどのパラメータから、KPI（表示回数、クリック数、視聴単価など）を試算し、シミュレーションシートを出力するWebツールです。 |
 | **youtube-data-acquisition** | **YouTubeデータ収集ツール**<br>YouTube Data API v3を利用して、指定したチャンネルの登録者数、再生回数、動画数などの統計情報を定期的に取得し、スプレッドシートに記録します。 |
+| **Lark_Calendar_Base-Task** | **Lark/Feishu カレンダー&タスク同期（Bitable連携）**<br>Lark/Feishuのカレンダーイベント＋My tasks（Task v2）を、指定期間（過去/未来日数）で取得してBitableに同期します。OAuth（ユーザー認可）でCalendar/Task APIを叩き、Bitableはtenant tokenで書き込みます。<br>必要列（event_id, calendar_id, start/end, doc_url等）を自動作成し、作成/更新/削除（ハード/ソフト削除切替）まで差分反映します。オプションでprimaryカレンダーのイベントに議事録（meeting_minute）を自動作成してURLを保存します。サイドバーUIでカレンダー選択・設定保存・手動同期、毎日/数分間隔のトリガー同期の管理も行えます。 |
+| **Official_line-Lark_Base** | **LINE×Lark Bitable連携（Webhook/Automation/Login移行）**<br>1つのWebアプリで3系統を処理します。① LINE Bot Webhook: follow時にプロフィール取得→Bitableへユーザー（LINEユーザーID/表示名）をUpsert。② Lark Automation（bitable_record_changed）: BitableレコードのMessageText等を見てLINEへPush/Multicast送信し、Status列を「送信済み/失敗」等で更新。③ LINE Login移行ページ: OAuthで取得したユーザー情報をBitableへ保存し「移行完了」画面を表示します。<br>設定はスプレッドシートのProperty行から読み、Larkのapp_access_tokenをキャッシュします。 |
+| **proline-Lark_Base** | **外部Webhook→スプレッドシート→Bitable自動送信**<br>外部からのGET/POST Webhookを受け取り、ペイロードを1階層にフラット化してスプレッドシート（Webhook受信）に保存し、未送信行を最大100件ずつLark Bitableへ自動送信します。<br>送信前にBitableのフィールド一覧をキャッシュし、未知のキーはフィールドを自動作成（テキスト型）してから投入します（user_data[xxx]のような角括弧キーは「leaf優先」変換）。重複ガード（id優先／なければ内容ハッシュ、TTL=6時間）、Lockでの同時実行防止、リトライ（指数バックオフ）、送信ステータス・エラー詳細・record_idの記録まで含みます。設定は設定シート（URLからbaseId/tableId抽出＋プロパティに保存）で管理します。 |
+| **UTAGE-Lark_Base** | **UTAGEシート→Bitable一括アップロード**<br>複数のGoogleシート（共通/決済/イベント/予約/シナリオ/LINE等）を、対応するBitableテーブルへbatch_createで一括アップロードします。Bitable側に存在する列だけ送信し、日付っぽい列はミリ秒timestamp変換、回数/金額/入金額など末尾一致は数値化します。送信した行はシートの「送信済」列に「済」マークして再送防止します。<br>BaseURLからbaseIdとAPIホスト（larksuite/feishu）を判定し、tenant tokenをキャッシュします。Bitableのテーブル一覧からtableIDを自動補完する機能、毎日トリガーの追加/一覧/個別削除などのメニューUIも提供します（LINEシートの受信日時/登録日時の自動補完処理あり）。 |
 
 ## 開発環境のセットアップ
 

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <base target="_top">
+    <style>
+        body {
+            font-family: Roboto, Arial, sans-serif;
+            margin: 0;
+            padding: 12px;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            margin: 6px 0;
+            background: #4285f4;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            opacity: .9;
+        }
+
+        button.secondary {
+            background: #34a853;
+        }
+    </style>
+    <script>
+        function run(fn) {
+            google.script.run
+                .withSuccessHandler(() => alert('完了しました'))
+                .withFailureHandler(e => alert('エラー: ' + e.message))
+            [fn]();
+        }
+    </script>
+</head>
+
+<body>
+    <h3>UTAGE ↔ Bitable</h3>
+
+    <button onclick="run('uiAutofill')">テーブルID 自動取得</button>
+    <button class="secondary" onclick="run('uiSyncCommon')">共通項目を同期</button>
+    <button onclick="run('uiSyncAll')">全シートを同期</button>
+</body>
+
+</html>
