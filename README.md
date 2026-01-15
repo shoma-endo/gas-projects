@@ -14,6 +14,10 @@
 | **lark-ocr** | **Lark OCR連携検証**<br>Lark (Lark Suite) のAPIとGemini APIを組み合わせて、アップロードされたファイルのOCR処理や解析を行うための検証用プロジェクトです。 |
 | **sim-creation** | **広告シミュレーション作成ツール**<br>動画・静止画広告の予算、CPM、CTRなどのパラメータから、KPI（表示回数、クリック数、視聴単価など）を試算し、シミュレーションシートを出力するWebツールです。 |
 | **youtube-data-acquisition** | **YouTubeデータ収集ツール**<br>YouTube Data API v3を利用して、指定したチャンネルの登録者数、再生回数、動画数などの統計情報を定期的に取得し、スプレッドシートに記録します。 |
+| **larkcalendar-base-task** | Larkカレンダー＆タスクをLark内Baseに自動同期（差分更新） |
+| **officialline-larkbase** | LINEBotを使い、Webhook受信・Lark内Baseからのメッセージ送信・LINE Login移行を統合処理 |
+| **proline-larkbase** | 外部WebhookをスプレッドシートでLark内Baseへ中継（フィールド自動生成・重複防止付き） |
+| **utage-larkbase** | UTAGEの複数シートをLark内Baseへ一括アップロード（日付・数値自動変換） |
 
 ## 開発環境のセットアップ
 

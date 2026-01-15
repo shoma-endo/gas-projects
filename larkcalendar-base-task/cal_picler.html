@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans JP", sans-serif;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin: 6px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            background: #f7f7f7;
+            cursor: pointer;
+        }
+
+        .btn.primary {
+            background: #2f6feb;
+            color: #fff;
+            border-color: #2f6feb;
+        }
+
+        .btn.danger {
+            background: #d73a49;
+            color: #fff;
+            border-color: #d73a49;
+        }
+
+        .row {
+            margin: 6px 0;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .muted {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .box {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            margin: 8px 0;
+            max-height: 260px;
+            overflow: auto;
+        }
+
+        .kv {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .label {
+            font-size: 12px;
+            color: #444;
+        }
+
+        .log {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+
+        .spinner {
+            display: none;
+            font-size: 12px;
+            color: #2f6feb;
+        }
+
+        .spinner.on {
+            display: inline-block;
+        }
+
+        input[type="number"] {
+            width: 90px;
+        }
+
+        input[type="time"] {
+            width: 130px;
+        }
+
+        .sync-params {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin: 6px 0;
+        }
+
+        .trigger-status {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 6px;
+            padding: 8px;
+            margin: 4px 0;
+            font-size: 12px;
+        }
+
+        .trigger-controls {
+            display: flex;
+            gap: 4px;
+            margin: 4px 0;
+        }
+
+        .trigger-controls .btn {
+            max-width: 120px;
+            padding: 6px 12px;
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <h3>Lark セットアップ & 同期</h3>
+
+    <!-- ① 認可 & ② ステータス -->
+    <div class="box">
+        <button class="btn" onclick="openOAuth()">① Lark認証URLを開く（OAuth）</button>
+        <button class="btn" onclick="checkStatus()">② トークン確認</button>
+        <div id="status" class="kv"></div>
+    </div>
+
+    <!-- ③ カレンダー/タスク一覧 -->
+    <div class="box" style="max-height:none;">
+        <div><b>③ カレンダー一覧取得</b></div>
+        <div class="row">
+            <button class="btn" style="max-width:220px;" onclick="getList()">一覧を取得</button>
+            <span id="listInfo" class="muted"></span>
+        </div>
+        <div id="calbox"></div>
+    </div>
+
+    <!-- ④ 同期 -->
+    <div class="box" style="max-height:none;">
+        <div><b>④ 同期</b></div>
+        <div class="sync-params">
+            <div class="row">
+                <span class="label">過去（日）</span>
+                <input type="number" id="past" value="14" min="0">
+            </div>
+            <div class="row">
+                <span class="label">未来（日）</span>
+                <input type="number" id="future" value="30" min="0">
+            </div>
+        </div>
+        <div class="row">
+            <button class="btn primary" style="max-width:240px;" onclick="sync()">選択を同期</button>
+            <span id="busy" class="spinner">同期中…</span>
+        </div>
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- ⑤ 毎日トリガー -->
+    <div class="box" style="max-height:none;">
+        <div><b>⑤ 毎日トリガー設定</b></div>
+        <div id="dailyTriggerStatus" class="trigger-status">設定中のトリガーはありません。</div>
+        <div class="row">
+            <span class="label">時刻</span>
+            <input type="time" id="dailyTime" value="03:00" step="60">
+        </div>
+        <div class="trigger-controls">
+            <button class="btn" onclick="setDaily()">設定</button>
+            <button class="btn danger" onclick="clearDaily()">解除</button>
+        </div>
+    </div>
+
+    <!-- ⑥ 頻繁トリガー -->
+    <div class="box" style="max-height:none;">
+        <div><b>⑥ 頻繁同期トリガー設定</b></div>
+        <div id="frequentTriggerStatus" class="trigger-status">設定中のトリガーはありません。</div>
+        <div class="row">
+            <span class="label">間隔（分）</span>
+            <input type="number" id="frequentMinutes" value="15" min="1" max="60">
+            <span class="muted">※1-60分間隔</span>
+        </div>
+        <div class="trigger-controls">
+            <button class="btn" onclick="setFrequent()">設定</button>
+            <button class="btn danger" onclick="clearFrequent()">解除</button>
+        </div>
+    </div>
+
+    <script>
+        function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m])); }
+        function errSummary(x) { return (x && x.error) ? x.error : (x && x.message) ? x.message : String(x); }
+        function errDetail(x) {
+            const d = (x && x.detail) ? x.detail : x;
+            try { return JSON.stringify(d, null, 2); } catch (_) { return String(d); }
+        }
+
+        // ① OAuth
+        function openOAuth() {
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (r && r.ok && r.url) { window.open(r.url, '_blank'); }
+                    else { alert('認可URL 取得失敗: ' + errSummary(r)); }
+                })
+                .withFailureHandler(e => {
+                    alert('認可URL エラー: ' + errSummary(e));
+                    console.log('OAuth error detail:', e);
+                })
+                .uiGetOAuthURL();
+        }
+
+        // ② ステータス
+        function checkStatus() {
+            const el = document.getElementById('status');
+            el.textContent = '取得中…';
+            google.script.run
+                .withSuccessHandler(s => {
+                    if (!s || s.ok === false) {
+                        el.textContent = `ステータス取得失敗\n${errSummary(s)}\n\n${errDetail(s)}`;
+                        return;
+                    }
+                    const remain = (typeof s.userTokenRemainSec === 'number' && s.userTokenRemainSec > 0)
+                        ? `\n残り秒数: ${s.userTokenRemainSec}` : '';
+                    const kv = `Base: ${escapeHtml(s.baseId)}
+Table: ${escapeHtml(s.tableId)}
+アクセストークン: ${s.hasUserToken ? 'あり' : 'なし'}${remain}`;
+                    el.textContent = kv.trim();
+                })
+                .withFailureHandler(e => {
+                    el.textContent = `ステータス取得例外\n${errSummary(e)}\n\n${errDetail(e)}`;
+                    console.log('status error:', e);
+                })
+                .uiGetStatus();
+        }
+
+        // ③ カレンダー一覧
+        let selected = new Set();
+        let calendarNames = {};
+
+        function getList() {
+            selected.clear();
+            calendarNames = {};
+            const info = document.getElementById('listInfo');
+            const box = document.getElementById('calbox');
+            box.innerHTML = '';
+            info.textContent = '読込中…';
+
+            // （Code.gs側に getCalendarsForUI → uiGetCalendars のエイリアスあり）
+            google.script.run
+                .withSuccessHandler(r => {
+                    info.textContent = '';
+                    if (!r || r.ok === false) {
+                        info.textContent = '取得失敗: ' + errSummary(r);
+                        const pre = document.createElement('pre'); pre.className = 'log'; pre.textContent = errDetail(r);
+                        box.appendChild(pre);
+                        return;
+                    }
+                    (r.calendars || []).forEach(c => {
+                        calendarNames[c.calendar_id] = c.summary || '（無題）';
+                        const typeStr = String(c.type || '');
+                        const roleStr = String(c.access_role || '');
+                        const isGoogle = typeStr === 'google';
+                        const isFreeBusy = roleStr.indexOf('free_busy') === 0;
+                        const disabled = isGoogle || isFreeBusy;
+
+                        let note = '';
+                        if (c.calendar_id === 'my_tasks') note = '（Task v2）';
+                        else if (isGoogle) note = '（Googleは非対応）';
+                        else if (isFreeBusy) note = '（free_busyのみ）';
+
+                        const div = document.createElement('div');
+                        div.style.margin = '2px 0';
+                        div.innerHTML = `
+          <label>
+            <input type="checkbox" value="${c.calendar_id}" ${disabled ? 'disabled' : ''}>
+            ${escapeHtml(c.summary || '（無題）')}
+            <span class="muted">| role=${roleStr} | type=${typeStr} ${note}</span>
+          </label>`;
+                        const inp = div.querySelector('input');
+                        inp.addEventListener('change', e => {
+                            if (e.target.checked) selected.add(e.target.value); else selected.delete(e.target.value);
+                        });
+                        box.appendChild(div);
+                    });
+                })
+                .withFailureHandler(e => {
+                    info.textContent = '取得エラー: ' + errSummary(e);
+                    const pre = document.createElement('pre'); pre.className = 'log'; pre.textContent = errDetail(e);
+                    box.appendChild(pre);
+                    console.log('calendar list error:', e);
+                })
+                .getCalendarsForUI();
+        }
+
+        // ④ 同期
+        function sync() {
+            const log = document.getElementById('log'); log.textContent = '';
+            const busy = document.getElementById('busy'); busy.classList.add('on');
+
+            const past = -Math.max(0, Number(document.getElementById('past').value || 14));
+            const future = Math.max(0, Number(document.getElementById('future').value || 30));
+            const ids = Array.from(selected);
+
+            google.script.run
+                .withSuccessHandler(r => {
+                    busy.classList.remove('on');
+                    if (!r || r.ok === false) {
+                        log.textContent = `同期失敗: ${errSummary(r)}\n\n${errDetail(r)}`;
+                        return;
+                    }
+                    if (!r.results || !r.results.length) {
+                        log.textContent = '同期完了（結果が空）';
+                        return;
+                    }
+                    r.results.forEach(x => {
+                        const calendarName = calendarNames[x.calendar_id] || x.calendar_id;
+                        if (x.ok) {
+                            const created = x.result.created || 0;
+                            const updated = x.result.updated || 0;
+                            const deleted = x.result.deleted || 0;
+                            log.textContent += `${calendarName} ✅\n・created=${created}\n・updated=${updated}\n・deleted=${deleted}\n\n`;
+                        } else {
+                            log.textContent += `${calendarName} ❌\nエラー: ${x.error}\n\n`;
+                        }
+                    });
+                })
+                .withFailureHandler(e => {
+                    busy.classList.remove('on');
+                    log.textContent = '同期例外: ' + errSummary(e) + '\n\n' + errDetail(e);
+                    console.log('sync error:', e);
+                })
+                // 旧: syncSelectedCalendarsFromUI(ids, {pastDays, futureDays})
+                // 新: uiRunManualSync(ids, pastDays, futureDays)
+                .uiRunManualSync(ids, past, future);
+        }
+
+        // ⑤ 毎日トリガー
+        function refreshDailyTriggerStatus() {
+            google.script.run
+                .withSuccessHandler(r => {
+                    const el = document.getElementById('dailyTriggerStatus');
+                    if (!r || r.ok === false) { el.textContent = '取得失敗: ' + errSummary(r); return; }
+                    const s = r.status;
+                    if (!s || !s.exists) { el.textContent = '設定中のトリガーはありません。'; return; }
+                    const hh = (s.hour == null ? '??' : ('0' + s.hour).slice(-2));
+                    const mm = (s.minute == null ? '00' : ('0' + s.minute).slice(-2));
+                    el.textContent = `${hh}時${mm}分にトリガーが設定中です。`;
+                })
+                .withFailureHandler(e => {
+                    document.getElementById('dailyTriggerStatus').textContent = '取得エラー: ' + errSummary(e);
+                    console.log('daily trigger status error:', e);
+                })
+                .uiGetDailyTriggerStatus();
+        }
+        function setDaily() {
+            const v = document.getElementById('dailyTime').value || '03:00';
+            const [h, m] = v.split(':').map(Number);
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (!r || r.ok === false) { alert('設定失敗: ' + errSummary(r)); return; }
+                    refreshDailyTriggerStatus();
+                })
+                .withFailureHandler(e => {
+                    alert('設定エラー: ' + errSummary(e));
+                    console.log('set daily error:', e);
+                })
+                .uiSetDailyTrigger(h, m);
+        }
+        function clearDaily() {
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (!r || r.ok === false) { alert('解除失敗: ' + errSummary(r)); return; }
+                    refreshDailyTriggerStatus();
+                })
+                .withFailureHandler(e => {
+                    alert('解除エラー: ' + errSummary(e));
+                    console.log('clear daily error:', e);
+                })
+                .uiClearDailyTrigger();
+        }
+
+        // ⑥ 頻繁トリガー
+        function refreshFrequentTriggerStatus() {
+            google.script.run
+                .withSuccessHandler(r => {
+                    const el = document.getElementById('frequentTriggerStatus');
+                    if (!r || r.ok === false) { el.textContent = '取得失敗: ' + errSummary(r); return; }
+                    el.textContent = r.status && r.status.exists ? '頻繁同期トリガーが設定中です。' : '設定中のトリガーはありません。';
+                })
+                .withFailureHandler(e => {
+                    document.getElementById('frequentTriggerStatus').textContent = '取得エラー: ' + errSummary(e);
+                    console.log('frequent trigger status error:', e);
+                })
+                .uiGetFrequentTriggerStatus();
+        }
+        function setFrequent() {
+            const minutes = Number(document.getElementById('frequentMinutes').value) || 15;
+            if (minutes < 1 || minutes > 60) { alert('間隔は1-60分で設定してください'); return; }
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (!r || r.ok === false) { alert('設定失敗: ' + errSummary(r)); return; }
+                    refreshFrequentTriggerStatus();
+                })
+                .withFailureHandler(e => {
+                    alert('設定エラー: ' + errSummary(e));
+                    console.log('set frequent error:', e);
+                })
+                .uiSetFrequentTrigger(minutes);
+        }
+        function clearFrequent() {
+            google.script.run
+                .withSuccessHandler(r => {
+                    if (!r || r.ok === false) { alert('解除失敗: ' + errSummary(r)); return; }
+                    refreshFrequentTriggerStatus();
+                })
+                .withFailureHandler(e => {
+                    alert('解除エラー: ' + errSummary(e));
+                    console.log('clear frequent error:', e);
+                })
+                .uiClearFrequentTrigger();
+        }
+
+        // 初期化
+        checkStatus();
+        refreshDailyTriggerStatus();
+        refreshFrequentTriggerStatus();
+    </script>
+</body>
+
+</html>

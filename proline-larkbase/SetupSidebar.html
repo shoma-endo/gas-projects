@@ -1,0 +1,31 @@
+<!-- QuickSetupSidebar.html -->
+<div style="font-family:Roboto,Arial,sans-serif;padding:12px">
+    <h3>Webhook‑Lark ワンクリック設定</h3>
+    <p>
+        1. 「設定」シートに <b>LARK_URL</b> と
+        <b>スプレッドシートURL</b> を入力します。<br>
+        2. 下のボタンを押すだけで<br>
+        ─ BaseID / TableID<br>
+        ─ SheetID<br>
+        ─ Script Properties（SECRET など）<br>
+        が自動設定されます。
+    </p>
+
+    <button onclick="run()" style="padding:6px 16px">設定を完了</button>
+    <div id="msg" style="margin-top:12px;color:green"></div>
+
+    <script>
+        function run() {
+            document.getElementById('msg').textContent = '実行中…';
+            google.script.run
+                .withSuccessHandler(function (m) {
+                    document.getElementById('msg').textContent = m;
+                })
+                .withFailureHandler(function (e) {
+                    document.getElementById('msg').style.color = 'red';
+                    document.getElementById('msg').textContent = 'エラー: ' + e.message;
+                })
+                .autoCompleteSettings();
+        }
+    </script>
+</div>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>アカウント移行</title>
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        h1 {
+            margin-bottom: 0.5em;
+            color: #0078d7;
+        }
+
+        p {
+            margin-bottom: 1.5em;
+            font-size: 1em;
+            text-align: center;
+            max-width: 300px;
+        }
+
+        #migrateBtn {
+            background: linear-gradient(135deg, #4a90e2, #0078d7);
+            border: none;
+            color: #fff;
+            padding: 0.75em 1.5em;
+            font-size: 1em;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        #migrateBtn:hover {
+            background: #005a9e;
+        }
+
+        #migrateBtn:disabled {
+            opacity: 0.6;
+            cursor: default;
+        }
+
+        #linkContainer {
+            margin-top: 1em;
+        }
+
+        #linkContainer a {
+            display: inline-block;
+            background: #fff;
+            border: 1px solid #0078d7;
+            padding: 0.5em 1em;
+            border-radius: 4px;
+            color: #0078d7;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background 0.3s;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #linkContainer a:hover {
+            background: #e6f0fa;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>LINEアカウント移行</h1>
+    <p>以下のボタンをクリックして、LINEアカウントの移行処理を開始してください。</p>
+    <button id="migrateBtn">移行リンクを取得</button>
+    <div id="linkContainer"></div>
+
+    <script>
+        const btn = document.getElementById('migrateBtn');
+        const container = document.getElementById('linkContainer');
+
+        btn.addEventListener('click', () => {
+            btn.disabled = true;
+            btn.textContent = '生成中...';
+            google.script.run.withSuccessHandler(url => {
+                btn.style.display = 'none';
+                container.innerHTML = `<a href="${url}" target="_blank">ここをクリックして移行</a>`;
+            }).makeAuthUrl();
+        });
+    </script>
+</body>
+
+</html>
