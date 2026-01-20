@@ -55,11 +55,32 @@ function sendCheckedRows() {
     return;
   }
 
-  const values = sheet.getRange(1, 1, lastRow, lastCol).getValues();
-  const header = values[0].map(h => String(h || '').trim());
+  // ヘッダー行を動的に検索（CHECK_COLを含む行を探す）
+  const headerRowInfo = findHeaderRow_(sheet, SEND_CFG.CHECK_COL);
+  if (!headerRowInfo) {
+    SpreadsheetApp.getUi().alert(`エラー: 「${SEND_CFG.CHECK_COL}」列が見つかりません。`);
+    return;
+  }
+
+  const headerRow = headerRowInfo.row;
+  const dataStartRow = headerRow + 1;
+
+  Logger.log(`ヘッダー行検出: ${headerRow}行目, データ開始: ${dataStartRow}行目`);
+
+  // ヘッダー行からデータを取得
+  const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+  const header = headerValues.map(h => String(h || '').trim());
+
+  // データ行を取得
+  const dataRowCount = lastRow - headerRow;
+  if (dataRowCount < 1) {
+    SpreadsheetApp.getUi().alert('データ行がありません。');
+    return;
+  }
+  const values = sheet.getRange(dataStartRow, 1, dataRowCount, lastCol).getValues();
 
   // デバッグ(ヘッダー列とチェック列の実値確認)
-  debugHeaderColumnInThisSheet_(sheet, SEND_CFG.CHECK_COL, 2, 10);
+  debugHeaderColumnInThisSheet_(sheet, SEND_CFG.CHECK_COL, dataStartRow, 10);
 
   const map = buildMailHeaderMap_(header);
 
@@ -80,8 +101,9 @@ function sendCheckedRows() {
   const doneUpdates = [];
   const statusUpdates = [];
 
-  for (let r = 1; r < values.length; r++) {
+  for (let r = 0; r < values.length; r++) {
     const row = values[r];
+    const actualRow = dataStartRow + r; // 実際のシート行番号
 
     // 完全空行はスキップ
     if (isBlankRow_(row)) continue;
@@ -90,7 +112,7 @@ function sendCheckedRows() {
     const doneValue = String(row[doneCol] || '').trim();
     const statusValue = String(row[statusCol] || '').trim();
 
-    Logger.log(`行${r + 1}: 掲載開始報告をする=${stringify_(checkValue)}(型:${typeof checkValue}), 掲載開始報告=${doneValue}, ステータス=${statusValue}`);
+    Logger.log(`行${actualRow}: 掲載開始報告をする=${stringify_(checkValue)}(型:${typeof checkValue}), 掲載開始報告=${doneValue}, ステータス=${statusValue}`);
 
     // 既に送信済みの場合はスキップ
     if (doneValue === '済' || statusValue === '送信済') {
@@ -128,8 +150,8 @@ function sendCheckedRows() {
         replyTo: MAIL_COMMON.REPLY_TO,
       });
 
-      doneUpdates.push({ row: r + 1, col: doneCol + 1, value: '済' });
-      statusUpdates.push({ row: r + 1, col: statusCol + 1, value: '送信済' });
+      doneUpdates.push({ row: actualRow, col: doneCol + 1, value: '済' });
+      statusUpdates.push({ row: actualRow, col: statusCol + 1, value: '送信済' });
 
       sentCount++;
 
@@ -198,6 +220,25 @@ function buildMailBody_(row, map) {
 /* =========================
  * ユーティリティ関数
  * ========================= */
+
+/**
+ * ヘッダー行を動的に検索
+ * @param {Sheet} sheet - 対象シート
+ * @param {string} headerText - 検索するヘッダー名
+ * @returns {Object|null} - { row: ヘッダー行番号, col: 列番号 } または null
+ */
+function findHeaderRow_(sheet, headerText) {
+  const ranges = sheet.createTextFinder(headerText).matchEntireCell(true).findAll();
+  if (!ranges || ranges.length === 0) {
+    return null;
+  }
+  // 最初に見つかったセルの行をヘッダー行とする
+  const firstMatch = ranges[0];
+  return {
+    row: firstMatch.getRow(),
+    col: firstMatch.getColumn()
+  };
+}
 
 /**
  * ヘッダー行からマップを構築
