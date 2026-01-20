@@ -215,7 +215,10 @@ function processPlan(payload) {
 
         // v03用：想定視聴回数・想定視聴率・想定視聴単価の計算
         if (viewUnitCost !== null && viewUnitCost > 0) {
-          estimatedViews = budget / viewUnitCost;  // 想定視聴回数 = 予算 ÷ 視聴単価
+          // 視聴単価もマージン率を考慮する必要がある
+          const rate = 1 - (marginPct / 100);
+          const viewUnitCostWithMargin = viewUnitCost / rate;  // マージン率を考慮した視聴単価
+          estimatedViews = budget / viewUnitCostWithMargin;  // 想定視聴回数 = 予算 ÷ 視聴単価（マージン率考慮後）
           if (impressions !== null && impressions > 0) {
             estimatedViewRate = estimatedViews / impressions;  // 想定視聴率 = 想定視聴回数 ÷ 表示回数
           }
@@ -291,24 +294,18 @@ function processPlan(payload) {
     } else {
       // 動画出力
       const colBudget = columnToLetter(6);
-      const colCpm = sheetName === "動画SIM出力 v03" ? columnToLetter(8) : columnToLetter(13);  // v03シートはH列（想定表示単価）、それ以外はM列
       const colImpressions = columnToLetter(7);
       const colCompletionRate = columnToLetter(10);
       const colCompleteViews = columnToLetter(9);
+      // CPM列の参照先（v03シート以外はM列）
+      const colCpm = columnToLetter(13);
 
       writeColumn(sh, startRow, 5, rows.map(r => [r.duration]));    // E 動画の尺
       writeColumn(sh, startRow, 6, rows.map(r => [r.budget]));      // F 予算
-      // G列: 表示回数の計算（v03シートは想定表示単価を参照、それ以外はCPMを参照）
+      // G列: 表示回数の出力（v03シートは計算済み値を直接出力、それ以外は計算式）
       if (sheetName === "動画SIM出力 v03") {
-        // v03シート: 表示回数 = 予算 ÷ 想定表示単価（H列は1回あたりの単価）
-        writeColumn(
-          sh,
-          startRow,
-          7,
-          rowNumbers.map(rowNum => [
-            `=IFERROR(IF(AND(ISNUMBER($${colBudget}${rowNum}),ISNUMBER($${colCpm}${rowNum}),$${colCpm}${rowNum}>0),$${colBudget}${rowNum}/$${colCpm}${rowNum},""),"")`
-          ])
-        ); // G 表示回数 = 予算 ÷ 想定表示単価
+        // v03シート: JavaScriptで計算した表示回数を直接出力（動画シートのG列CPMから計算済み）
+        writeColumn(sh, startRow, 7, rows.map(r => [r.impressions]));  // G 表示回数
       } else {
         // その他のシート: 表示回数 = 予算 ÷ CPM × 1000（CPMは1000回あたりの単価）
         writeColumn(
