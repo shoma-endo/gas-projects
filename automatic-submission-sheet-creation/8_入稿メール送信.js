@@ -44,134 +44,142 @@ const SEND_CFG = {
 
 /**
  * チェック行を即時送信（掲載開始報告メール）
+ * ★修正：LockServiceで排他制御 + 送信直後に即時ステータス更新で重複送信防止
  */
 function sendCheckedRows() {
-  const sheet = SpreadsheetApp.getActiveSheet();
-
-  const lastRow = sheet.getLastRow();
-  const lastCol = sheet.getLastColumn();
-  if (lastRow < 2 || lastCol < 1) {
-    SpreadsheetApp.getUi().alert('データがありません。');
+  // ★排他制御：同時実行を防止
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) {
+    SpreadsheetApp.getUi().alert('別の送信処理が実行中です。しばらく待ってから再度お試しください。');
     return;
   }
 
-  // ヘッダー行を動的に検索（CHECK_COLを含む行を探す）
-  const headerRowInfo = findHeaderRow_(sheet, SEND_CFG.CHECK_COL);
-  if (!headerRowInfo) {
-    SpreadsheetApp.getUi().alert(`エラー: 「${SEND_CFG.CHECK_COL}」列が見つかりません。`);
-    return;
+  try {
+    const sheet = SpreadsheetApp.getActiveSheet();
+
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow < 2 || lastCol < 1) {
+      SpreadsheetApp.getUi().alert('データがありません。');
+      return;
+    }
+
+    // ヘッダー行を動的に検索（CHECK_COLを含む行を探す）
+    const headerRowInfo = findHeaderRow_(sheet, SEND_CFG.CHECK_COL);
+    if (!headerRowInfo) {
+      SpreadsheetApp.getUi().alert(`エラー: 「${SEND_CFG.CHECK_COL}」列が見つかりません。`);
+      return;
+    }
+
+    const headerRow = headerRowInfo.row;
+    const dataStartRow = headerRow + 1;
+
+    Logger.log(`ヘッダー行検出: ${headerRow}行目, データ開始: ${dataStartRow}行目`);
+
+    // ヘッダー行からデータを取得
+    const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
+    const header = headerValues.map(h => String(h || '').trim());
+
+    // データ行を取得
+    const dataRowCount = lastRow - headerRow;
+    if (dataRowCount < 1) {
+      SpreadsheetApp.getUi().alert('データ行がありません。');
+      return;
+    }
+    const values = sheet.getRange(dataStartRow, 1, dataRowCount, lastCol).getValues();
+
+    // デバッグ(ヘッダー列とチェック列の実値確認)
+    debugHeaderColumnInThisSheet_(sheet, SEND_CFG.CHECK_COL, dataStartRow, 10);
+
+    const map = buildMailHeaderMap_(header);
+
+    // 必須列のチェック
+    const checkCol = requireMailCol_(map, SEND_CFG.CHECK_COL);
+    const doneCol = requireMailCol_(map, SEND_CFG.DONE_COL);
+    const statusCol = requireMailCol_(map, SEND_CFG.STATUS_COL);
+
+    const toCol = requireMailCol_(map, SEND_CFG.COLS.TO);
+    const salesCol = findMailCol_(map, SEND_CFG.COLS.SALES_EMAIL);
+
+    getExecutorEmail_(); //権限/取得可否の早期チェック
+
+    let sentCount = 0;
+    let errorCount = 0;
+
+    for (let r = 0; r < values.length; r++) {
+      const row = values[r];
+      const actualRow = dataStartRow + r; // 実際のシート行番号
+
+      // 完全空行はスキップ
+      if (isBlankRow_(row)) continue;
+
+      const checkValue = row[checkCol];
+      const doneValue = String(row[doneCol] || '').trim();
+      const statusValue = String(row[statusCol] || '').trim();
+
+      Logger.log(`行${actualRow}: 掲載開始報告をする=${stringify_(checkValue)}(型:${typeof checkValue}), 掲載開始報告=${doneValue}, ステータス=${statusValue}`);
+
+      // 既に送信済みの場合はスキップ
+      if (doneValue === '済' || statusValue === '送信済') {
+        Logger.log(`  →スキップ:既に送信済み`);
+        continue;
+      }
+
+      // チェックがついていない場合はスキップ
+      if (!toMailBool_(checkValue)) {
+        Logger.log(`  →スキップ:チェックなし`);
+        continue;
+      }
+
+      const to = String(row[toCol] || '').trim();
+      if (!to) {
+        Logger.log(`  →エラー:宛先メールアドレスなし`);
+        errorCount++;
+        continue;
+      }
+
+      // CC設定
+      const ccList = [MAIL_COMMON.FIXED_CC];
+      if (salesCol !== null) {
+        const salesEmail = String(row[salesCol] || '').trim();
+        if (salesEmail) ccList.push(salesEmail);
+      }
+
+      const subject = buildMailSubject_(row, map);
+      const body = buildMailBody_(row, map);
+
+      try {
+        GmailApp.sendEmail(to, subject, body, {
+          name: MAIL_COMMON.FROM_NAME,
+          cc: ccList.join(','),
+          replyTo: MAIL_COMMON.REPLY_TO,
+        });
+
+        // ★修正：送信直後に即時ステータス更新（レースコンディション防止）
+        sheet.getRange(actualRow, doneCol + 1).setValue('済');
+        sheet.getRange(actualRow, statusCol + 1).setValue('送信済');
+
+        sentCount++;
+        Logger.log(`  →送信成功:${to}`);
+
+      } catch (e) {
+        errorCount++;
+        Logger.log(`  →送信エラー:${e && e.message ? e.message : e}`);
+      }
+    }
+
+    SpreadsheetApp.getUi().alert(
+      '送信完了',
+      `送信成功:${sentCount}件\nエラー:${errorCount}件`,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+
+    Logger.log(`メール送信完了:成功=${sentCount},エラー=${errorCount}`);
+
+  } finally {
+    // ★排他制御：必ずロック解放
+    lock.releaseLock();
   }
-
-  const headerRow = headerRowInfo.row;
-  const dataStartRow = headerRow + 1;
-
-  Logger.log(`ヘッダー行検出: ${headerRow}行目, データ開始: ${dataStartRow}行目`);
-
-  // ヘッダー行からデータを取得
-  const headerValues = sheet.getRange(headerRow, 1, 1, lastCol).getValues()[0];
-  const header = headerValues.map(h => String(h || '').trim());
-
-  // データ行を取得
-  const dataRowCount = lastRow - headerRow;
-  if (dataRowCount < 1) {
-    SpreadsheetApp.getUi().alert('データ行がありません。');
-    return;
-  }
-  const values = sheet.getRange(dataStartRow, 1, dataRowCount, lastCol).getValues();
-
-  // デバッグ(ヘッダー列とチェック列の実値確認)
-  debugHeaderColumnInThisSheet_(sheet, SEND_CFG.CHECK_COL, dataStartRow, 10);
-
-  const map = buildMailHeaderMap_(header);
-
-  // 必須列のチェック
-  const checkCol = requireMailCol_(map, SEND_CFG.CHECK_COL);
-  const doneCol = requireMailCol_(map, SEND_CFG.DONE_COL);
-  const statusCol = requireMailCol_(map, SEND_CFG.STATUS_COL);
-
-  const toCol = requireMailCol_(map, SEND_CFG.COLS.TO);
-  const salesCol = findMailCol_(map, SEND_CFG.COLS.SALES_EMAIL);
-
-  getExecutorEmail_(); //権限/取得可否の早期チェック
-
-  let sentCount = 0;
-  let errorCount = 0;
-
-  // 更新をまとめる
-  const doneUpdates = [];
-  const statusUpdates = [];
-
-  for (let r = 0; r < values.length; r++) {
-    const row = values[r];
-    const actualRow = dataStartRow + r; // 実際のシート行番号
-
-    // 完全空行はスキップ
-    if (isBlankRow_(row)) continue;
-
-    const checkValue = row[checkCol];
-    const doneValue = String(row[doneCol] || '').trim();
-    const statusValue = String(row[statusCol] || '').trim();
-
-    Logger.log(`行${actualRow}: 掲載開始報告をする=${stringify_(checkValue)}(型:${typeof checkValue}), 掲載開始報告=${doneValue}, ステータス=${statusValue}`);
-
-    // 既に送信済みの場合はスキップ
-    if (doneValue === '済' || statusValue === '送信済') {
-      Logger.log(`  →スキップ:既に送信済み`);
-      continue;
-    }
-
-    // チェックがついていない場合はスキップ
-    if (!toMailBool_(checkValue)) {
-      Logger.log(`  →スキップ:チェックなし`);
-      continue;
-    }
-
-    const to = String(row[toCol] || '').trim();
-    if (!to) {
-      Logger.log(`  →エラー:宛先メールアドレスなし`);
-      errorCount++;
-      continue;
-    }
-
-    // CC設定
-    const ccList = [MAIL_COMMON.FIXED_CC];
-    if (salesCol !== null) {
-      const salesEmail = String(row[salesCol] || '').trim();
-      if (salesEmail) ccList.push(salesEmail);
-    }
-
-    const subject = buildMailSubject_(row, map);
-    const body = buildMailBody_(row, map);
-
-    try {
-      GmailApp.sendEmail(to, subject, body, {
-        name: MAIL_COMMON.FROM_NAME,
-        cc: ccList.join(','),
-        replyTo: MAIL_COMMON.REPLY_TO,
-      });
-
-      doneUpdates.push({ row: actualRow, col: doneCol + 1, value: '済' });
-      statusUpdates.push({ row: actualRow, col: statusCol + 1, value: '送信済' });
-
-      sentCount++;
-
-    } catch (e) {
-      errorCount++;
-      Logger.log(`  →送信エラー:${e && e.message ? e.message : e}`);
-    }
-  }
-
-  // まとめて反映
-  doneUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
-  statusUpdates.forEach(u => sheet.getRange(u.row, u.col).setValue(u.value));
-
-  SpreadsheetApp.getUi().alert(
-    '送信完了',
-    `送信成功:${sentCount}件\nエラー:${errorCount}件`,
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
-
-  Logger.log(`メール送信完了:成功=${sentCount},エラー=${errorCount}`);
 }
 
 /**
