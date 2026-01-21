@@ -27,7 +27,7 @@ function receivePlan(payload) {
   let sh = ss.getSheetByName('Submissions');
   if (!sh) {
     sh = ss.insertSheet('Submissions');
-    sh.getRange(1,1,1,10).setValues([[
+    sh.getRange(1, 1, 1, 10).setValues([[
       'Timestamp',
       'SubmissionId',
       'RequestText',
@@ -321,10 +321,17 @@ function processSubmission(payload, submissionId) {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('入稿シート自動作成')
+  const ui = SpreadsheetApp.getUi();
+
+  // 入稿シート自動作成メニュー
+  ui.createMenu('入稿シート自動作成')
     .addItem('ダイアログで開く', 'openDialog')
     .addItem('READMEを表示', 'openReadmeDialog')
+    .addToUi();
+
+  // 入稿メールメニュー
+  ui.createMenu('入稿メール')
+    .addItem('チェック行 → 即時送信', 'sendCheckedRows')
     .addToUi();
 }
 
