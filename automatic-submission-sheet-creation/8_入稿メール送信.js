@@ -59,6 +59,8 @@ function sendCheckedRows() {
 
     const lastRow = sheet.getLastRow();
     const lastCol = sheet.getLastColumn();
+    // 2: ヘッダー行(1行目) + データ行(1行以上)で最低2行必要
+    // 1: 最低1列は必要
     if (lastRow < 2 || lastCol < 1) {
       SpreadsheetApp.getUi().alert('データがありません。');
       return;
@@ -369,6 +371,12 @@ function debugHeaderColumnInThisSheet_(sheet, headerText, dataStartRow, sampleRo
   });
 }
 
+/**
+ * 列番号をアルファベット表記に変換する（例: 1→"A", 27→"AA"）
+ * デバッグログでセル位置を分かりやすく表示するために使用
+ * @param {number} col1 - 1始まりの列番号
+ * @returns {string} 列のアルファベット表記
+ */
 function columnToLetter_(col1) {
   let n = col1;
   let s = '';
