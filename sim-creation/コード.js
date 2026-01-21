@@ -215,7 +215,10 @@ function processPlan(payload) {
 
         // v03用：想定視聴回数・想定視聴率・想定視聴単価の計算
         if (viewUnitCost !== null && viewUnitCost > 0) {
-          estimatedViews = budget / viewUnitCost;  // 想定視聴回数 = 予算 ÷ 視聴単価
+          // 視聴単価もマージン率を考慮する必要がある
+          const rate = 1 - (marginPct / 100);
+          const viewUnitCostWithMargin = viewUnitCost / rate;  // マージン率を考慮した視聴単価
+          estimatedViews = budget / viewUnitCostWithMargin;  // 想定視聴回数 = 予算 ÷ 視聴単価（マージン率考慮後）
           if (impressions !== null && impressions > 0) {
             estimatedViewRate = estimatedViews / impressions;  // 想定視聴率 = 想定視聴回数 ÷ 表示回数
           }
@@ -291,21 +294,29 @@ function processPlan(payload) {
     } else {
       // 動画出力
       const colBudget = columnToLetter(6);
-      const colCpm = sheetName === "動画SIM出力 v03" ? columnToLetter(16) : columnToLetter(13);  // v03シートはP列、それ以外はM列
       const colImpressions = columnToLetter(7);
       const colCompletionRate = columnToLetter(10);
       const colCompleteViews = columnToLetter(9);
+      // CPM列の参照先（v03シート以外はM列）
+      const colCpm = columnToLetter(13);
 
       writeColumn(sh, startRow, 5, rows.map(r => [r.duration]));    // E 動画の尺
       writeColumn(sh, startRow, 6, rows.map(r => [r.budget]));      // F 予算
-      writeColumn(
-        sh,
-        startRow,
-        7,
-        rowNumbers.map(rowNum => [
-          `=IFERROR(IF(AND(ISNUMBER($${colBudget}${rowNum}),ISNUMBER($${colCpm}${rowNum}),$${colCpm}${rowNum}>0),$${colBudget}${rowNum}/$${colCpm}${rowNum}*1000,""),"")`
-        ])
-      ); // G 表示回数 = 予算 ÷ CPM × 1000
+      // G列: 表示回数の出力（v03シートは計算済み値を直接出力、それ以外は計算式）
+      if (sheetName === "動画SIM出力 v03") {
+        // v03シート: JavaScriptで計算した表示回数を直接出力（動画シートのG列CPMから計算済み）
+        writeColumn(sh, startRow, 7, rows.map(r => [r.impressions]));  // G 表示回数
+      } else {
+        // その他のシート: 表示回数 = 予算 ÷ CPM × 1000（CPMは1000回あたりの単価）
+        writeColumn(
+          sh,
+          startRow,
+          7,
+          rowNumbers.map(rowNum => [
+            `=IFERROR(IF(AND(ISNUMBER($${colBudget}${rowNum}),ISNUMBER($${colCpm}${rowNum}),$${colCpm}${rowNum}>0),$${colBudget}${rowNum}/$${colCpm}${rowNum}*1000,""),"")`
+          ])
+        ); // G 表示回数 = 予算 ÷ CPM × 1000
+      }
       writeColumn(sh, startRow, 8, rows.map(r => [r.unitCost]));    // H 想定表示単価
       
       // v03シート以外の場合は通常のI列、J列、K列を出力
@@ -426,9 +437,29 @@ function processPlan(payload) {
           ])
         ); // N 完全視聴単価
 
-        writeColumn(sh, startRow, 15, rows.map(r => [r.viewDefinition]));  // O 視聴定義（元L列から右にシフト）
-        writeColumn(sh, startRow, 16, rows.map(r => [r.cpmWithMargin]));   // P CPM（元M列から右にシフト）
-        writeColumn(sh, startRow, 17, rows.map(r => [r.kpi]));             // Q KPI（元N列から右にシフト）
+        // O列、P列、Q列: クリック関連
+        const colCtrV03 = columnToLetter(15);  // O列: クリック率
+        const colClicksV03 = columnToLetter(16);  // P列: クリック数
+        writeColumn(sh, startRow, 15, rows.map(r => [r.ctrVal]));        // O クリック率
+        writeColumn(
+          sh,
+          startRow,
+          16,
+          rowNumbers.map(rowNum => [
+            `=IFERROR(IF(AND(ISNUMBER($${colImpressionsV03}${rowNum}),ISNUMBER($${colCtrV03}${rowNum})),$${colImpressionsV03}${rowNum}*$${colCtrV03}${rowNum},""),"")`
+          ])
+        ); // P クリック数
+        writeColumn(
+          sh,
+          startRow,
+          17,
+          rowNumbers.map(rowNum => [
+            `=IFERROR(IF(AND(ISNUMBER($${colClicksV03}${rowNum}),ISNUMBER($${colBudgetV03}${rowNum}),$${colClicksV03}${rowNum}>0),$${colBudgetV03}${rowNum}/$${colClicksV03}${rowNum},""),"")`
+          ])
+        ); // Q クリック単価
+        writeColumn(sh, startRow, 18, rows.map(r => [r.viewDefinition]));  // R 視聴定義
+        // S列: 入稿締切日（コードでは出力しない）
+        writeColumn(sh, startRow, 20, rows.map(r => [r.kpi]));             // T KPI
       } else {
         writeColumn(sh, startRow, 12, rows.map(r => [r.viewDefinition]));// L 視聴定義
         writeColumn(sh, startRow, 14, rows.map(r => [r.kpi]));           // N KPI
@@ -468,6 +499,9 @@ function processPlan(payload) {
         sh.getRange(startRow, 12, rows.length, 1).setNumberFormat("#,##0");     // L 完全視聴回数
         sh.getRange(startRow, 13, rows.length, 1).setNumberFormat("0.00%");     // M 完全視聴率
         sh.getRange(startRow, 14, rows.length, 1).setNumberFormat("¥#,##0.00"); // N 完全視聴単価
+        sh.getRange(startRow, 15, rows.length, 1).setNumberFormat("0.00%");     // O クリック率
+        sh.getRange(startRow, 16, rows.length, 1).setNumberFormat("#,##0");     // P クリック数
+        sh.getRange(startRow, 17, rows.length, 1).setNumberFormat("¥#,##0.00"); // Q クリック単価
       }
     }
   });
